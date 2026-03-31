@@ -39,3 +39,4 @@ volumes:
 
 networks:
   nearme_network:
+  driver: bridge
