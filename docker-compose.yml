@@ -1,7 +1,6 @@
-version: "3.8"
 
 services:
-  mysql:
+  postgres:
     image: postgres:latest
     container_name: nearme_postgres
     restart: unless-stopped
@@ -12,7 +11,7 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/
     networks:
       - nearme_network
 
@@ -36,7 +35,7 @@ services:
       - /app/node_modules
 
 volumes:
-  mysql_data:
+  postgres_data:
 
 networks:
   nearme_network:
