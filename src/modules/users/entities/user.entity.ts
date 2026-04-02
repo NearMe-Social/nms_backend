@@ -6,6 +6,7 @@ import {
 } from 'typeorm';
 import { UserBlock } from '../../blocks/entities/block.entities';
 import { Report } from '../../reports/entities/report.entities';
+import { Notification } from '../../notifications/entities/notification.entities';
 export enum UserRole {
   USER = 'USER',
   ADMIN = 'ADMIN',
@@ -68,4 +69,7 @@ export class User {
 
   @OneToMany(() => Report, (report) => report.reviewedBy)
   reviewedReports: Report[];
+
+  @OneToMany(() => Notification, (notification) => notification.user)
+  notifications: Notification[];
 }
