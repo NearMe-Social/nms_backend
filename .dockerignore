@@ -4,5 +4,3 @@ dist
 .git
 .gitignore
 .env
-Dockerfile
-docker-compose.yml
