@@ -1,10 +1,5 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  OneToMany,
-} from 'typeorm';
-import { UserBlock } from '../../blocks/entities/block.entities';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
+import { UserBlock } from '../../blocks/entities/user-block.entity';
 import { Report } from '../../reports/entities/report.entities';
 import { Notification } from '../../notifications/entities/notification.entities';
 export enum UserRole {
@@ -57,7 +52,6 @@ export class User {
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   updated_at: Date;
 
-  
   @OneToMany(() => UserBlock, (block) => block.blocker)
   blocksInitiated: UserBlock[];
 
