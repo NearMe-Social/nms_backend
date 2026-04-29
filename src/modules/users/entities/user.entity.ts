@@ -3,13 +3,14 @@ import {
   Column,
   PrimaryGeneratedColumn,
   OneToMany,
+
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { UserBlock } from '../../blocks/entities/user-block.entity';
 import { Report } from '../../reports/entities/report.entities';
 import { Notification } from '../../notifications/entities/notification.entities';
-import { Conversation } from 'src/modules/conversations/entities/conversation.entities';
 import { ConversationParticipant } from 'src/modules/conversations/entities/conversation-participant.entity';
+
 
 export enum UserRole {
   USER = 'USER',
@@ -31,7 +32,7 @@ export class User {
   @Column()
   password_hash: string;
 
-  @Column({
+   @Column({
     type: 'enum',
     enum: UserRole,
     default: UserRole.USER,
