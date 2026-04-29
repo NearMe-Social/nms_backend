@@ -2,10 +2,15 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
+  OneToMany,
+
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { UserBlock } from '../../blocks/entities/user-block.entity';
+import { Report } from '../../reports/entities/report.entities';
+import { Notification } from '../../notifications/entities/notification.entities';
+import { ConversationParticipant } from '../../conversations/entities/conversation-participant.entity';
+
 
 export enum UserRole {
   USER = 'USER',
@@ -72,4 +77,8 @@ export class User {
 
   @OneToMany(() => Notification, (notification) => notification.user)
   notifications: Notification[];
+
+  @OneToMany(() => ConversationParticipant, (conversationparticipant) => conversationparticipant.user)
+  conversationParticipants: ConversationParticipant[];
+
 }
