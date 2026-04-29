@@ -4,7 +4,7 @@ services:
     container_name: nearme_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: root
+      POSTGRES_USER: nearme_user
       POSTGRES_DB: nearme_social
       POSTGRES_PASSWORD: nearme_pass
     ports:

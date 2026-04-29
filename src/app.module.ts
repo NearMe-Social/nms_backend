@@ -22,7 +22,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
       username: process.env.DB_USERNAME || 'nearme_user',
       password: process.env.DB_PASSWORD || 'nearme_pass',
       database: process.env.DB_NAME || 'nearme_social',
-      entities: ['src/**/*.entity.ts'],
+      entities: [__dirname + '/**/*.{entity,entities}{.ts,.js}'],
       logging: true,
     }),
     UsersModule,

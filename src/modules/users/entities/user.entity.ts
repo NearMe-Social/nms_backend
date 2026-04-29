@@ -9,7 +9,7 @@ import { Exclude } from 'class-transformer';
 import { UserBlock } from '../../blocks/entities/user-block.entity';
 import { Report } from '../../reports/entities/report.entities';
 import { Notification } from '../../notifications/entities/notification.entities';
-import { ConversationParticipant } from 'src/modules/conversations/entities/conversation-participant.entity';
+import { ConversationParticipant } from '../../conversations/entities/conversation-participant.entity';
 
 
 export enum UserRole {
