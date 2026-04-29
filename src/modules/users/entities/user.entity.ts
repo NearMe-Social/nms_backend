@@ -7,6 +7,11 @@ import {
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
 
+export enum UserRole {
+  USER = 'USER',
+  ADMIN = 'ADMIN',
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -22,27 +27,49 @@ export class User {
   @Column()
   password_hash: string;
 
+   @Column({
+    type: 'enum',
+    enum: UserRole,
+    default: UserRole.USER,
+  })
+  role: UserRole;
+
   @Column({ nullable: true })
   profile_image: string;
 
   @Column({ type: 'text', nullable: true })
   bio: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
-  current_latitude: string;
+  @Column('decimal', { precision: 10, scale: 7, nullable: true })
+  current_latitude: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
-  current_longitude: string;
+  @Column('decimal', { precision: 10, scale: 7, nullable: true })
+  current_longitude: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   location_updated_at: Date;
 
   @Column({ default: true })
   is_active: boolean;
 
-  @CreateDateColumn()
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
 
-  @UpdateDateColumn()
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   updated_at: Date;
+
+  @OneToMany(() => UserBlock, (block) => block.blocker)
+  blocksInitiated: UserBlock[];
+
+  @OneToMany(() => UserBlock, (block) => block.blockedUser)
+  blocksReceived: UserBlock[];
+
+  @OneToMany(() => Report, (report) => report.reporter)
+  reports: Report[];
+
+  @OneToMany(() => Report, (report) => report.reviewedBy)
+  reviewedReports: Report[];
+
+  @OneToMany(() => Notification, (notification) => notification.user)
+  notifications: Notification[];
 }
