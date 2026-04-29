@@ -1,5 +1,8 @@
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { User } from '../entities/user.entity';
+import { Post } from '../entities/post.entity';
+import { Comment } from '../entities/comment.entity';
+import { Reaction } from '../entities/reaction.entity';
 
 export const typeOrmConfig = (): TypeOrmModuleOptions => ({
   type: 'postgres',
@@ -8,7 +11,7 @@ export const typeOrmConfig = (): TypeOrmModuleOptions => ({
   username: process.env.DB_USER ?? 'postgres',
   password: process.env.DB_PASS ?? '',
   database: process.env.DB_NAME ?? 'proximity_db',
-  entities: [User],
+  entities: [User, Post, Comment, Reaction],
   synchronize: true, // Set to false in production
   logging: false,
 });
