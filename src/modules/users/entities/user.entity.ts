@@ -49,6 +49,9 @@ export class User {
   @Column({ type: 'timestamp', nullable: true })
   location_updated_at: Date;
 
+  @Column({ default: 'USER' })
+  role: string;
+
   @Column({ default: true })
   is_active: boolean;
 

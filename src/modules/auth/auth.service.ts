@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../users/user.entity';
+import { User } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -30,15 +30,15 @@ export class AuthService {
     const user = this.userRepository.create({
       username: registerDto.username,
       email: registerDto.email,
-      passwordHash,
+      password_hash: passwordHash,
       role: 'USER',
-      isActive: true,
+      is_active: true,
     });
 
     const savedUser = await this.userRepository.save(user);
 
     const payload = {
-      sub: savedUser.userId,
+      sub: savedUser.user_id,
       email: savedUser.email,
       role: savedUser.role,
     };
@@ -47,7 +47,7 @@ export class AuthService {
       message: 'Registration successful',
       token: this.jwtService.sign(payload),
       user: {
-        userId: savedUser.userId,
+        userId: savedUser.user_id,
         username: savedUser.username,
         email: savedUser.email,
         role: savedUser.role,
@@ -64,18 +64,18 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const passwordMatched = await bcrypt.compare(loginDto.password, user.passwordHash);
+    const passwordMatched = await bcrypt.compare(loginDto.password, user.password_hash);
 
     if(!passwordMatched) {
       throw new UnauthorizedException('Invalid password');
     }
 
-    if(!user.isActive) {
+    if(!user.is_active) {
       throw new UnauthorizedException('Account is inactive');
     }
 
     const payload = {
-      sub: user.userId,
+      sub: user.user_id,
       email: user.email,
       role: user.role,
     };
@@ -84,7 +84,7 @@ export class AuthService {
       message: 'Login successful',
       token: this.jwtService.sign(payload),
       user: {
-        userId: user.userId,
+        userId: user.user_id,
         username: user.username,
         email: user.email,
         role: user.role,
@@ -94,8 +94,8 @@ export class AuthService {
 
   async getCurrentUser(userId: number) {
     const user = await this.userRepository.findOne({
-      where: { userId },
-      select: ['userId', 'username', 'email', 'role', 'isActive'],
+      where: { user_id: userId },
+      select: ['user_id', 'username', 'email', 'role', 'is_active'],
     });
 
     if(!user) {
