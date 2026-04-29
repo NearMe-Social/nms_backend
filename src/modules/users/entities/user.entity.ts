@@ -1,7 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany } from 'typeorm';
-import { UserBlock } from '../../blocks/entities/user-block.entity';
-import { Report } from '../../reports/entities/report.entities';
-import { Notification } from '../../notifications/entities/notification.entities';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { Exclude } from 'class-transformer';
+
 export enum UserRole {
   USER = 'USER',
   ADMIN = 'ADMIN',
@@ -12,16 +17,17 @@ export class User {
   @PrimaryGeneratedColumn()
   user_id: number;
 
-  @Column()
+  @Column({ unique: true })
   username: string;
 
   @Column({ unique: true })
   email: string;
 
+  @Exclude()
   @Column()
   password_hash: string;
 
-  @Column({
+   @Column({
     type: 'enum',
     enum: UserRole,
     default: UserRole.USER,
