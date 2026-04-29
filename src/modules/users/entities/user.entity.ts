@@ -2,10 +2,14 @@ import {
   Entity,
   Column,
   PrimaryGeneratedColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
+import { UserBlock } from '../../blocks/entities/user-block.entity';
+import { Report } from '../../reports/entities/report.entities';
+import { Notification } from '../../notifications/entities/notification.entities';
+import { Conversation } from 'src/modules/conversations/entities/conversation.entities';
+import { ConversationParticipant } from 'src/modules/conversations/entities/conversation-participant.entity';
 
 export enum UserRole {
   USER = 'USER',
@@ -27,7 +31,7 @@ export class User {
   @Column()
   password_hash: string;
 
-   @Column({
+  @Column({
     type: 'enum',
     enum: UserRole,
     default: UserRole.USER,
@@ -48,9 +52,6 @@ export class User {
 
   @Column({ type: 'timestamp', nullable: true })
   location_updated_at: Date;
-
-  @Column({ default: 'USER' })
-  role: string;
 
   @Column({ default: true })
   is_active: boolean;
@@ -75,4 +76,8 @@ export class User {
 
   @OneToMany(() => Notification, (notification) => notification.user)
   notifications: Notification[];
+
+  @OneToMany(() => ConversationParticipant, (conversationparticipant) => conversationparticipant.user)
+  conversationParticipants: ConversationParticipant[];
+
 }

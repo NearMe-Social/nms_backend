@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -31,7 +31,7 @@ export class AuthService {
       username: registerDto.username,
       email: registerDto.email,
       password_hash: passwordHash,
-      role: 'USER',
+      role: UserRole.USER,
       is_active: true,
     });
 
@@ -47,7 +47,7 @@ export class AuthService {
       message: 'Registration successful',
       token: this.jwtService.sign(payload),
       user: {
-        userId: savedUser.user_id,
+        user_id: savedUser.user_id,
         username: savedUser.username,
         email: savedUser.email,
         role: savedUser.role,
