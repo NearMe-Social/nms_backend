@@ -550,56 +550,6 @@ export class CreateInitialSchema1776889769784 implements MigrationInterface {
       }),
     );
 
-    // Create blocks table
-    await queryRunner.createTable(
-      new Table({
-        name: 'blocks',
-        columns: [
-          {
-            name: 'block_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'blocked_user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
-    );
-
-    // Add foreign keys for blocks
-    await queryRunner.createForeignKey(
-      'blocks',
-      new TableForeignKey({
-        columnNames: ['user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
-
-    await queryRunner.createForeignKey(
-      'blocks',
-      new TableForeignKey({
-        columnNames: ['blocked_user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
-
     // Create indexes for better query performance
     await queryRunner.createIndex(
       'posts',
@@ -674,7 +624,6 @@ export class CreateInitialSchema1776889769784 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Drop all tables in reverse order due to foreign keys
-    await queryRunner.dropTable('blocks');
     await queryRunner.dropTable('reports');
     await queryRunner.dropTable('notifications');
     await queryRunner.dropTable('messages');
@@ -683,6 +632,7 @@ export class CreateInitialSchema1776889769784 implements MigrationInterface {
     await queryRunner.dropTable('reactions');
     await queryRunner.dropTable('comments');
     await queryRunner.dropTable('posts');
+    await queryRunner.dropTable('user_blocks');
     await queryRunner.dropTable('users');
   }
 }
