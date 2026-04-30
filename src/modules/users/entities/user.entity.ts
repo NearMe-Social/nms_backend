@@ -17,6 +17,13 @@ export enum UserRole {
   ADMIN = 'ADMIN',
 }
 
+export enum Gender {
+  FEMALE = 'female',
+  MALE = 'male',
+  NON_BINARY = 'non-binary',
+  PREFER_NOT = 'prefer-not',
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn()
@@ -28,9 +35,25 @@ export class User {
   @Column({ unique: true })
   email: string;
 
+  @Column()
+  first_name: string;
+
+  @Column()
+  last_name: string;
+
   @Exclude()
   @Column()
   password_hash: string;
+
+  @Column({ type: 'date', nullable: true })
+  birthday: Date | null;
+
+  @Column({
+    type: 'enum',
+    enum: Gender,
+    nullable: true,
+  })
+  gender: Gender | null;
 
    @Column({
     type: 'enum',
