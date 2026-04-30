@@ -7,7 +7,6 @@ import {
   OneToMany,
   JoinColumn,
 } from 'typeorm';
-import { User } from './user.entity';
 
 @Entity('posts')
 export class Post {
@@ -25,7 +24,7 @@ export class Post {
 
   @ManyToOne('User', 'posts', { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
-  user: User;
+  user: any;
 
   @OneToMany('Comment', 'post')
   comments: any[];
