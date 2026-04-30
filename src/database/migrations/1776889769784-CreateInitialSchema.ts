@@ -67,7 +67,55 @@ export class CreateInitialSchema1776889769784 implements MigrationInterface {
       true,
     );
 
+    // Create user_blocks table
+    await queryRunner.createTable(
+      new Table({
+        name: 'user_blocks',
+        columns: [
+          {
+            name: 'user_block_id',
+            type: 'uuid',
+            isPrimary: true,
+            default: 'gen_random_uuid()',
+          },
+          {
+            name: 'blocker_id',
+            type: 'uuid',
+          },
+          {
+            name: 'blocked_user_id',
+            type: 'uuid',
+          },
+          {
+            name: 'created_at',
+            type: 'timestamp',
+            default: 'CURRENT_TIMESTAMP',
+          },
+        ],
+      }),
+      true,
+    );
 
+    // Add foreign keys for user_blocks
+    await queryRunner.createForeignKey(
+      'user_blocks',
+      new TableForeignKey({
+        columnNames: ['blocker_id'],
+        referencedColumnNames: ['user_id'],
+        referencedTableName: 'users',
+        onDelete: 'CASCADE',
+      }),
+    );
+
+    await queryRunner.createForeignKey(
+      'user_blocks',
+      new TableForeignKey({
+        columnNames: ['blocked_user_id'],
+        referencedColumnNames: ['user_id'],
+        referencedTableName: 'users',
+        onDelete: 'CASCADE',
+      }),
+    );
 
     // Create posts table
     await queryRunner.createTable(
