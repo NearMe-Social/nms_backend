@@ -67,55 +67,7 @@ export class CreateInitialSchema1776889769784 implements MigrationInterface {
       true,
     );
 
-    // Create user_blocks table
-    await queryRunner.createTable(
-      new Table({
-        name: 'user_blocks',
-        columns: [
-          {
-            name: 'user_block_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'blocker_id',
-            type: 'uuid',
-          },
-          {
-            name: 'blocked_user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
-    );
 
-    // Add foreign keys for user_blocks
-    await queryRunner.createForeignKey(
-      'user_blocks',
-      new TableForeignKey({
-        columnNames: ['blocker_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
-
-    await queryRunner.createForeignKey(
-      'user_blocks',
-      new TableForeignKey({
-        columnNames: ['blocked_user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
 
     // Create posts table
     await queryRunner.createTable(
@@ -252,6 +204,61 @@ export class CreateInitialSchema1776889769784 implements MigrationInterface {
 
     await queryRunner.createForeignKey(
       'comments',
+      new TableForeignKey({
+        columnNames: ['user_id'],
+        referencedColumnNames: ['user_id'],
+        referencedTableName: 'users',
+        onDelete: 'CASCADE',
+      }),
+    );
+
+    // Create reactions table
+    await queryRunner.createTable(
+      new Table({
+        name: 'reactions',
+        columns: [
+          {
+            name: 'reaction_id',
+            type: 'uuid',
+            isPrimary: true,
+            default: 'gen_random_uuid()',
+          },
+          {
+            name: 'post_id',
+            type: 'uuid',
+          },
+          {
+            name: 'user_id',
+            type: 'uuid',
+          },
+          {
+            name: 'type',
+            type: 'varchar',
+            default: "'like'",
+          },
+          {
+            name: 'created_at',
+            type: 'timestamp',
+            default: 'CURRENT_TIMESTAMP',
+          },
+        ],
+      }),
+      true,
+    );
+
+    // Add foreign keys for reactions
+    await queryRunner.createForeignKey(
+      'reactions',
+      new TableForeignKey({
+        columnNames: ['post_id'],
+        referencedColumnNames: ['post_id'],
+        referencedTableName: 'posts',
+        onDelete: 'CASCADE',
+      }),
+    );
+
+    await queryRunner.createForeignKey(
+      'reactions',
       new TableForeignKey({
         columnNames: ['user_id'],
         referencedColumnNames: ['user_id'],
@@ -623,6 +630,20 @@ export class CreateInitialSchema1776889769784 implements MigrationInterface {
     );
 
     await queryRunner.createIndex(
+      'reactions',
+      new TableIndex({
+        columnNames: ['post_id'],
+      }),
+    );
+
+    await queryRunner.createIndex(
+      'reactions',
+      new TableIndex({
+        columnNames: ['user_id'],
+      }),
+    );
+
+    await queryRunner.createIndex(
       'messages',
       new TableIndex({
         columnNames: ['conversation_id'],
@@ -659,9 +680,9 @@ export class CreateInitialSchema1776889769784 implements MigrationInterface {
     await queryRunner.dropTable('messages');
     await queryRunner.dropTable('conversation_participants');
     await queryRunner.dropTable('conversations');
+    await queryRunner.dropTable('reactions');
     await queryRunner.dropTable('comments');
     await queryRunner.dropTable('posts');
-    await queryRunner.dropTable('user_blocks');
     await queryRunner.dropTable('users');
   }
 }
