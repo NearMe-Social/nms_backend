@@ -1,686 +1,218 @@
-import { MigrationInterface, QueryRunner, Table, TableForeignKey, TableIndex } from 'typeorm';
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class CreateInitialSchema1776889769784 implements MigrationInterface {
+  name = 'CreateInitialSchema1776889769784';
+
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Create users table
-    await queryRunner.createTable(
-      new Table({
-        name: 'users',
-        columns: [
-          {
-            name: 'user_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'username',
-            type: 'varchar',
-            isUnique: true,
-          },
-          {
-            name: 'email',
-            type: 'varchar',
-            isUnique: true,
-          },
-          {
-            name: 'password_hash',
-            type: 'varchar',
-          },
-          {
-            name: 'first_name',
-            type: 'varchar',
-            isNullable: true,
-          },
-          {
-            name: 'last_name',
-            type: 'varchar',
-            isNullable: true,
-          },
-          {
-            name: 'bio',
-            type: 'text',
-            isNullable: true,
-          },
-          {
-            name: 'profile_image',
-            type: 'varchar',
-            isNullable: true,
-          },
-          {
-            name: 'is_active',
-            type: 'boolean',
-            default: true,
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-          {
-            name: 'updated_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
+    await queryRunner.query(
+      `CREATE TYPE "public"."users_gender_enum" AS ENUM('female', 'male', 'non-binary', 'prefer-not')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."users_role_enum" AS ENUM('USER', 'ADMIN')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."notifications_type_enum" AS ENUM('SYSTEM', 'MESSAGE', 'COMMENT', 'REPORT')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."reports_status_enum" AS ENUM('PENDING', 'REVIEWED')`,
     );
 
-    // Create user_blocks table
-    await queryRunner.createTable(
-      new Table({
-        name: 'user_blocks',
-        columns: [
-          {
-            name: 'user_block_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'blocker_id',
-            type: 'uuid',
-          },
-          {
-            name: 'blocked_user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
-    );
+    await queryRunner.query(`
+      CREATE TABLE "users" (
+        "user_id" SERIAL NOT NULL,
+        "username" character varying NOT NULL,
+        "email" character varying NOT NULL,
+        "first_name" character varying NOT NULL,
+        "last_name" character varying NOT NULL,
+        "password_hash" character varying NOT NULL,
+        "birthday" date,
+        "gender" "public"."users_gender_enum",
+        "role" "public"."users_role_enum" NOT NULL DEFAULT 'USER',
+        "profile_image" character varying,
+        "bio" text,
+        "current_latitude" numeric(10,7),
+        "current_longitude" numeric(10,7),
+        "location_updated_at" TIMESTAMP,
+        "is_active" boolean NOT NULL DEFAULT true,
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "updated_at" TIMESTAMP NOT NULL DEFAULT now(),
+        CONSTRAINT "UQ_users_username" UNIQUE ("username"),
+        CONSTRAINT "UQ_users_email" UNIQUE ("email"),
+        CONSTRAINT "PK_users" PRIMARY KEY ("user_id")
+      )
+    `);
 
-    // Add foreign keys for user_blocks
-    await queryRunner.createForeignKey(
-      'user_blocks',
-      new TableForeignKey({
-        columnNames: ['blocker_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
+    await queryRunner.query(`
+      CREATE TABLE "conversations" (
+        "conversation_id" SERIAL NOT NULL,
+        "type" character varying NOT NULL,
+        CONSTRAINT "PK_conversations" PRIMARY KEY ("conversation_id")
+      )
+    `);
 
-    await queryRunner.createForeignKey(
-      'user_blocks',
-      new TableForeignKey({
-        columnNames: ['blocked_user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
+    await queryRunner.query(`
+      CREATE TABLE "posts" (
+        "post_id" SERIAL NOT NULL,
+        "content" text NOT NULL,
+        "expires_at" TIMESTAMP NOT NULL,
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "user_id" integer,
+        CONSTRAINT "PK_posts" PRIMARY KEY ("post_id")
+      )
+    `);
 
-    // Create posts table
-    await queryRunner.createTable(
-      new Table({
-        name: 'posts',
-        columns: [
-          {
-            name: 'post_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'content',
-            type: 'text',
-          },
-          {
-            name: 'media',
-            type: 'text',
-            isNullable: true,
-          },
-          {
-            name: 'latitude',
-            type: 'decimal',
-            precision: 10,
-            scale: 8,
-            isNullable: true,
-          },
-          {
-            name: 'longitude',
-            type: 'decimal',
-            precision: 11,
-            scale: 8,
-            isNullable: true,
-          },
-          {
-            name: 'location_name',
-            type: 'varchar',
-            isNullable: true,
-          },
-          {
-            name: 'likes_count',
-            type: 'int',
-            default: 0,
-          },
-          {
-            name: 'comments_count',
-            type: 'int',
-            default: 0,
-          },
-          {
-            name: 'is_archived',
-            type: 'boolean',
-            default: false,
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-          {
-            name: 'updated_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
-    );
+    await queryRunner.query(`
+      CREATE TABLE "comments" (
+        "comment_id" SERIAL NOT NULL,
+        "content" text NOT NULL,
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "post_id" integer,
+        "user_id" integer,
+        CONSTRAINT "PK_comments" PRIMARY KEY ("comment_id")
+      )
+    `);
 
-    // Add foreign key for posts
-    await queryRunner.createForeignKey(
-      'posts',
-      new TableForeignKey({
-        columnNames: ['user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
+    await queryRunner.query(`
+      CREATE TABLE "reactions" (
+        "reaction_id" SERIAL NOT NULL,
+        "type" character varying NOT NULL DEFAULT 'like',
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "post_id" integer,
+        "user_id" integer,
+        CONSTRAINT "PK_reactions" PRIMARY KEY ("reaction_id")
+      )
+    `);
 
-    // Create comments table
-    await queryRunner.createTable(
-      new Table({
-        name: 'comments',
-        columns: [
-          {
-            name: 'comment_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'post_id',
-            type: 'uuid',
-          },
-          {
-            name: 'user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'content',
-            type: 'text',
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-          {
-            name: 'updated_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
-    );
+    await queryRunner.query(`
+      CREATE TABLE "conversation_participants" (
+        "conversation_participant_id" SERIAL NOT NULL,
+        "conversation_id" integer NOT NULL,
+        "user_id" integer NOT NULL,
+        "joined_at" TIMESTAMP NOT NULL DEFAULT now(),
+        CONSTRAINT "PK_conversation_participants" PRIMARY KEY ("conversation_participant_id")
+      )
+    `);
 
-    // Add foreign keys for comments
-    await queryRunner.createForeignKey(
-      'comments',
-      new TableForeignKey({
-        columnNames: ['post_id'],
-        referencedColumnNames: ['post_id'],
-        referencedTableName: 'posts',
-        onDelete: 'CASCADE',
-      }),
-    );
+    await queryRunner.query(`
+      CREATE TABLE "messages" (
+        "message_id" SERIAL NOT NULL,
+        "conversation_id" integer NOT NULL,
+        "sender_id" integer NOT NULL,
+        "content" character varying NOT NULL,
+        CONSTRAINT "PK_messages" PRIMARY KEY ("message_id")
+      )
+    `);
 
-    await queryRunner.createForeignKey(
-      'comments',
-      new TableForeignKey({
-        columnNames: ['user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
-    );
+    await queryRunner.query(`
+      CREATE TABLE "user_blocks" (
+        "user_block_id" SERIAL NOT NULL,
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "blocker_id" integer,
+        "blocked_user_id" integer,
+        CONSTRAINT "UQ_c4ba1cac6a804c93a6e9d396739" UNIQUE ("blocker_id", "blocked_user_id"),
+        CONSTRAINT "PK_user_blocks" PRIMARY KEY ("user_block_id")
+      )
+    `);
 
-    // Create reactions table
-    await queryRunner.createTable(
-      new Table({
-        name: 'reactions',
-        columns: [
-          {
-            name: 'reaction_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'post_id',
-            type: 'uuid',
-          },
-          {
-            name: 'user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'type',
-            type: 'varchar',
-            default: "'like'",
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
-    );
+    await queryRunner.query(`
+      CREATE TABLE "notifications" (
+        "notification_id" SERIAL NOT NULL,
+        "type" "public"."notifications_type_enum" NOT NULL,
+        "related_id" integer NOT NULL,
+        "message" text NOT NULL,
+        "is_read" boolean NOT NULL DEFAULT false,
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "user_id" integer,
+        CONSTRAINT "PK_notifications" PRIMARY KEY ("notification_id")
+      )
+    `);
 
-    // Add foreign keys for reactions
-    await queryRunner.createForeignKey(
-      'reactions',
-      new TableForeignKey({
-        columnNames: ['post_id'],
-        referencedColumnNames: ['post_id'],
-        referencedTableName: 'posts',
-        onDelete: 'CASCADE',
-      }),
-    );
+    await queryRunner.query(`
+      CREATE TABLE "reports" (
+        "report_id" SERIAL NOT NULL,
+        "target_type" character varying NOT NULL,
+        "target_id" integer NOT NULL,
+        "reason" character varying NOT NULL,
+        "status" "public"."reports_status_enum" NOT NULL DEFAULT 'PENDING',
+        "reviewed_at" TIMESTAMP,
+        "moderator_note" character varying,
+        "created_at" TIMESTAMP NOT NULL DEFAULT now(),
+        "reporter_id" integer,
+        "reviewed_by" integer,
+        CONSTRAINT "PK_reports" PRIMARY KEY ("report_id")
+      )
+    `);
 
-    await queryRunner.createForeignKey(
-      'reactions',
-      new TableForeignKey({
-        columnNames: ['user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
+    await queryRunner.query(
+      `ALTER TABLE "posts" ADD CONSTRAINT "FK_c4f9a7bd77b489e711277ee5986" FOREIGN KEY ("user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Create conversations table
-    await queryRunner.createTable(
-      new Table({
-        name: 'conversations',
-        columns: [
-          {
-            name: 'conversation_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'conversation_participants_id',
-            type: 'uuid',
-            isNullable: true,
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-          {
-            name: 'updated_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
+    await queryRunner.query(
+      `ALTER TABLE "comments" ADD CONSTRAINT "FK_259bf9825d9d198608d1b46b0b5" FOREIGN KEY ("post_id") REFERENCES "posts"("post_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Create conversation_participants table
-    await queryRunner.createTable(
-      new Table({
-        name: 'conversation_participants',
-        columns: [
-          {
-            name: 'conversation_participants_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'conversation_id',
-            type: 'uuid',
-          },
-          {
-            name: 'user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-          {
-            name: 'updated_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
+    await queryRunner.query(
+      `ALTER TABLE "comments" ADD CONSTRAINT "FK_4c675567d2a58f0b07cef09c13d" FOREIGN KEY ("user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Add foreign keys for conversation_participants
-    await queryRunner.createForeignKey(
-      'conversation_participants',
-      new TableForeignKey({
-        columnNames: ['conversation_id'],
-        referencedColumnNames: ['conversation_id'],
-        referencedTableName: 'conversations',
-        onDelete: 'CASCADE',
-      }),
+    await queryRunner.query(
+      `ALTER TABLE "reactions" ADD CONSTRAINT "FK_a1ac38351a456da43cd26d38be8" FOREIGN KEY ("post_id") REFERENCES "posts"("post_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    await queryRunner.createForeignKey(
-      'conversation_participants',
-      new TableForeignKey({
-        columnNames: ['user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
+    await queryRunner.query(
+      `ALTER TABLE "reactions" ADD CONSTRAINT "FK_dde6062145a93649adc5af3946e" FOREIGN KEY ("user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Add foreign key conversations -> conversation_participants
-    await queryRunner.createForeignKey(
-      'conversations',
-      new TableForeignKey({
-        columnNames: ['conversation_participants_id'],
-        referencedColumnNames: ['conversation_participants_id'],
-        referencedTableName: 'conversation_participants',
-        onDelete: 'SET NULL',
-      }),
+    await queryRunner.query(
+      `ALTER TABLE "conversation_participants" ADD CONSTRAINT "FK_1559e8a16b828f2e836a2312800" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("conversation_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Create messages table
-    await queryRunner.createTable(
-      new Table({
-        name: 'messages',
-        columns: [
-          {
-            name: 'message_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'conversation_id',
-            type: 'uuid',
-          },
-          {
-            name: 'sender_id',
-            type: 'uuid',
-          },
-          {
-            name: 'content',
-            type: 'text',
-          },
-          {
-            name: 'is_read',
-            type: 'boolean',
-            default: false,
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
+    await queryRunner.query(
+      `ALTER TABLE "conversation_participants" ADD CONSTRAINT "FK_377d4041a495b81ee1a85ae026f" FOREIGN KEY ("user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Add foreign keys for messages
-    await queryRunner.createForeignKey(
-      'messages',
-      new TableForeignKey({
-        columnNames: ['conversation_id'],
-        referencedColumnNames: ['conversation_id'],
-        referencedTableName: 'conversations',
-        onDelete: 'CASCADE',
-      }),
+    await queryRunner.query(
+      `ALTER TABLE "messages" ADD CONSTRAINT "FK_3bc55a7c3f9ed54b520bb5cfe23" FOREIGN KEY ("conversation_id") REFERENCES "conversations"("conversation_id") ON DELETE NO ACTION ON UPDATE NO ACTION`,
     );
-
-    await queryRunner.createForeignKey(
-      'messages',
-      new TableForeignKey({
-        columnNames: ['sender_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
+    await queryRunner.query(
+      `ALTER TABLE "user_blocks" ADD CONSTRAINT "FK_dfcd8a81016d1de587fbd2d70bf" FOREIGN KEY ("blocker_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Create notifications table
-    await queryRunner.createTable(
-      new Table({
-        name: 'notifications',
-        columns: [
-          {
-            name: 'notification_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'user_id',
-            type: 'uuid',
-          },
-          {
-            name: 'type',
-            type: 'varchar',
-          },
-          {
-            name: 'related_id',
-            type: 'uuid',
-            isNullable: true,
-          },
-          {
-            name: 'message',
-            type: 'text',
-          },
-          {
-            name: 'is_read',
-            type: 'boolean',
-            default: false,
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
+    await queryRunner.query(
+      `ALTER TABLE "user_blocks" ADD CONSTRAINT "FK_fdb57b48a77dcae7569297fded7" FOREIGN KEY ("blocked_user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Add foreign key for notifications
-    await queryRunner.createForeignKey(
-      'notifications',
-      new TableForeignKey({
-        columnNames: ['user_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'CASCADE',
-      }),
+    await queryRunner.query(
+      `ALTER TABLE "notifications" ADD CONSTRAINT "FK_9a8a82462cab47c73d25f49261f" FOREIGN KEY ("user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Create reports table
-    await queryRunner.createTable(
-      new Table({
-        name: 'reports',
-        columns: [
-          {
-            name: 'report_id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'gen_random_uuid()',
-          },
-          {
-            name: 'reporter_id',
-            type: 'uuid',
-          },
-          {
-            name: 'target_type',
-            type: 'varchar',
-          },
-          {
-            name: 'target_id',
-            type: 'uuid',
-          },
-          {
-            name: 'reason',
-            type: 'text',
-          },
-          {
-            name: 'status',
-            type: 'varchar',
-            default: "'pending'",
-          },
-          {
-            name: 'moderator_id',
-            type: 'uuid',
-            isNullable: true,
-          },
-          {
-            name: 'moderator_note',
-            type: 'text',
-            isNullable: true,
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-        ],
-      }),
-      true,
+    await queryRunner.query(
+      `ALTER TABLE "reports" ADD CONSTRAINT "FK_9459b9bf907a3807ef7143d2ead" FOREIGN KEY ("reporter_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION`,
     );
-
-    // Add foreign keys for reports
-    await queryRunner.createForeignKey(
-      'reports',
-      new TableForeignKey({
-        columnNames: ['reporter_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'SET NULL',
-      }),
-    );
-
-    await queryRunner.createForeignKey(
-      'reports',
-      new TableForeignKey({
-        columnNames: ['moderator_id'],
-        referencedColumnNames: ['user_id'],
-        referencedTableName: 'users',
-        onDelete: 'SET NULL',
-      }),
-    );
-
-    // Create indexes for better query performance
-    await queryRunner.createIndex(
-      'posts',
-      new TableIndex({
-        columnNames: ['user_id'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'posts',
-      new TableIndex({
-        columnNames: ['created_at'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'comments',
-      new TableIndex({
-        columnNames: ['post_id'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'comments',
-      new TableIndex({
-        columnNames: ['user_id'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'reactions',
-      new TableIndex({
-        columnNames: ['post_id'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'reactions',
-      new TableIndex({
-        columnNames: ['user_id'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'messages',
-      new TableIndex({
-        columnNames: ['conversation_id'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'messages',
-      new TableIndex({
-        columnNames: ['sender_id'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'notifications',
-      new TableIndex({
-        columnNames: ['user_id'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'reports',
-      new TableIndex({
-        columnNames: ['reporter_id'],
-      }),
+    await queryRunner.query(
+      `ALTER TABLE "reports" ADD CONSTRAINT "FK_e8fa0bffcaebc921b1e8e42a82f" FOREIGN KEY ("reviewed_by") REFERENCES "users"("user_id") ON DELETE SET NULL ON UPDATE NO ACTION`,
     );
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Drop all tables in reverse order due to foreign keys
-    await queryRunner.dropTable('reports');
-    await queryRunner.dropTable('notifications');
-    await queryRunner.dropTable('messages');
-    await queryRunner.dropTable('conversation_participants');
-    await queryRunner.dropTable('conversations');
-    await queryRunner.dropTable('reactions');
-    await queryRunner.dropTable('comments');
-    await queryRunner.dropTable('posts');
-    await queryRunner.dropTable('user_blocks');
-    await queryRunner.dropTable('users');
+    await queryRunner.query(`ALTER TABLE "reports" DROP CONSTRAINT "FK_e8fa0bffcaebc921b1e8e42a82f"`);
+    await queryRunner.query(`ALTER TABLE "reports" DROP CONSTRAINT "FK_9459b9bf907a3807ef7143d2ead"`);
+    await queryRunner.query(`ALTER TABLE "notifications" DROP CONSTRAINT "FK_9a8a82462cab47c73d25f49261f"`);
+    await queryRunner.query(`ALTER TABLE "user_blocks" DROP CONSTRAINT "FK_fdb57b48a77dcae7569297fded7"`);
+    await queryRunner.query(`ALTER TABLE "user_blocks" DROP CONSTRAINT "FK_dfcd8a81016d1de587fbd2d70bf"`);
+    await queryRunner.query(`ALTER TABLE "messages" DROP CONSTRAINT "FK_3bc55a7c3f9ed54b520bb5cfe23"`);
+    await queryRunner.query(`ALTER TABLE "conversation_participants" DROP CONSTRAINT "FK_377d4041a495b81ee1a85ae026f"`);
+    await queryRunner.query(`ALTER TABLE "conversation_participants" DROP CONSTRAINT "FK_1559e8a16b828f2e836a2312800"`);
+    await queryRunner.query(`ALTER TABLE "reactions" DROP CONSTRAINT "FK_dde6062145a93649adc5af3946e"`);
+    await queryRunner.query(`ALTER TABLE "reactions" DROP CONSTRAINT "FK_a1ac38351a456da43cd26d38be8"`);
+    await queryRunner.query(`ALTER TABLE "comments" DROP CONSTRAINT "FK_4c675567d2a58f0b07cef09c13d"`);
+    await queryRunner.query(`ALTER TABLE "comments" DROP CONSTRAINT "FK_259bf9825d9d198608d1b46b0b5"`);
+    await queryRunner.query(`ALTER TABLE "posts" DROP CONSTRAINT "FK_c4f9a7bd77b489e711277ee5986"`);
+
+    await queryRunner.query(`DROP TABLE "reports"`);
+    await queryRunner.query(`DROP TABLE "notifications"`);
+    await queryRunner.query(`DROP TABLE "user_blocks"`);
+    await queryRunner.query(`DROP TABLE "messages"`);
+    await queryRunner.query(`DROP TABLE "conversation_participants"`);
+    await queryRunner.query(`DROP TABLE "reactions"`);
+    await queryRunner.query(`DROP TABLE "comments"`);
+    await queryRunner.query(`DROP TABLE "posts"`);
+    await queryRunner.query(`DROP TABLE "conversations"`);
+    await queryRunner.query(`DROP TABLE "users"`);
+
+    await queryRunner.query(`DROP TYPE "public"."reports_status_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."notifications_type_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."users_role_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."users_gender_enum"`);
   }
 }

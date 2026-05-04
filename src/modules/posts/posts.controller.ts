@@ -1,4 +1,51 @@
-import { Controller } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post as HttpPost,
+} from '@nestjs/common';
+import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
+import { Post } from './entities/post.entities';
+import { PostsService } from './posts.service';
 
 @Controller('posts')
-export class PostsController {}
+export class PostsController {
+  constructor(private readonly postsService: PostsService) {}
+
+  @HttpPost()
+  @HttpCode(HttpStatus.CREATED)
+  create(@Body() createPostDto: CreatePostDto): Promise<Post> {
+    return this.postsService.create(createPostDto);
+  }
+
+  @Get()
+  findAll(): Promise<Post[]> {
+    return this.postsService.findAll();
+  }
+
+  @Get(':postId')
+  findOne(@Param('postId', ParseIntPipe) postId: number): Promise<Post> {
+    return this.postsService.findOne(postId);
+  }
+
+  @Patch(':postId')
+  update(
+    @Param('postId', ParseIntPipe) postId: number,
+    @Body() updatePostDto: UpdatePostDto,
+  ): Promise<Post> {
+    return this.postsService.update(postId, updatePostDto);
+  }
+
+  @Delete(':postId')
+  @HttpCode(HttpStatus.OK)
+  remove(@Param('postId', ParseIntPipe) postId: number): Promise<{ message: string }> {
+    return this.postsService.remove(postId);
+  }
+}
