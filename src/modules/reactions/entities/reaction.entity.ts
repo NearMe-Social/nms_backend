@@ -7,22 +7,22 @@ import {
   JoinColumn,
 } from 'typeorm';
 
-@Entity('comments')
-export class Comment {
+@Entity('reactions')
+export class Reaction {
   @PrimaryGeneratedColumn()
-  comment_id: number;
+  reaction_id: number;
 
-  @Column({ type: 'text' })
-  content: string;
+  @Column({ default: 'like' })
+  type: string;
 
   @CreateDateColumn()
   created_at: Date;
 
-  @ManyToOne('Post', 'comments', { onDelete: 'CASCADE' })
+  @ManyToOne('Post', 'reactions', { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
   post: any;
 
-  @ManyToOne('User', 'comments', { onDelete: 'CASCADE' })
+  @ManyToOne('User', 'reactions', { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: any;
 }

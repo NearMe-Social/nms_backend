@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole } from '../users/entities/user.entity';
+import { User, UserRole, Gender } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -30,7 +30,11 @@ export class AuthService {
     const user = this.userRepository.create({
       username: registerDto.username,
       email: registerDto.email,
+      first_name: registerDto.first_name,
+      last_name: registerDto.last_name,
       password_hash: passwordHash,
+      birthday: registerDto.birthday ? new Date(registerDto.birthday) : (null as any),
+      gender: registerDto.gender ? (registerDto.gender as Gender) : (null as any),
       role: UserRole.USER,
       is_active: true,
     });

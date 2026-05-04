@@ -8,7 +8,10 @@ export const AppDataSource = new DataSource({
   username: process.env.DB_USERNAME || 'root',
   password: process.env.DB_PASSWORD || 'nearme_pass',
   database: process.env.DB_NAME || 'nearme_social',
-  entities: [path.join(__dirname, '**/*.entity.ts')],
+  entities: [
+    path.join(__dirname, '**/*.entity.ts'),
+    path.join(__dirname, '**/*.entities.ts')
+  ],
   migrations: [path.join(__dirname, 'database/migrations/*.ts')],
   synchronize: process.env.NODE_ENV !== 'production',
   logging: process.env.DB_LOGGING === 'true',
