@@ -76,30 +76,30 @@ export class UsersService {
     const distanceSql = `
       6371000 * 2 * asin(
         sqrt(
-          power(sin(radians((user.current_latitude::float - :lat) / 2)), 2) +
+          power(sin(radians((nearby_user.current_latitude::float - :lat) / 2)), 2) +
           cos(radians(:lat)) *
-          cos(radians(user.current_latitude::float)) *
-          power(sin(radians((user.current_longitude::float - :lng) / 2)), 2)
+          cos(radians(nearby_user.current_latitude::float)) *
+          power(sin(radians((nearby_user.current_longitude::float - :lng) / 2)), 2)
         )
       )
     `;
 
     const queryBuilder = this.usersRepository
-      .createQueryBuilder('user')
-      .select('user.user_id', 'user_id')
-      .addSelect('user.username', 'username')
-      .addSelect('user.profile_image', 'profile_image')
-      .addSelect('user.location_updated_at', 'location_updated_at')
+      .createQueryBuilder('nearby_user')
+      .select('nearby_user.user_id', 'user_id')
+      .addSelect('nearby_user.username', 'username')
+      .addSelect('nearby_user.profile_image', 'profile_image')
+      .addSelect('nearby_user.location_updated_at', 'location_updated_at')
       .addSelect(distanceSql, 'distance_m')
-      .where('user.is_active = true')
-      .andWhere('user.current_latitude IS NOT NULL')
-      .andWhere('user.current_longitude IS NOT NULL')
+      .where('nearby_user.is_active = true')
+      .andWhere('nearby_user.current_latitude IS NOT NULL')
+      .andWhere('nearby_user.current_longitude IS NOT NULL')
       .andWhere(`${distanceSql} <= :radius`)
       .setParameters({ lat: query.lat, lng: query.lng, radius })
       .orderBy('distance_m', 'ASC');
 
     if (currentUserId) {
-      queryBuilder.andWhere('user.user_id != :currentUserId', {
+      queryBuilder.andWhere('nearby_user.user_id != :currentUserId', {
         currentUserId,
       });
     }
