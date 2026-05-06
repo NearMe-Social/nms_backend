@@ -15,12 +15,14 @@ export class UserBlock {
   user_block_id: number;
 
   @ManyToOne(() => User, (user) => user.blocksInitiated, {
+    nullable: false,
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'blocker_id' })
   blocker: User;
 
   @ManyToOne(() => User, (user) => user.blocksReceived, {
+    nullable: false,
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'blocked_user_id' })

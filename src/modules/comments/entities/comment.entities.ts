@@ -3,9 +3,15 @@ import {
   Column,
   PrimaryGeneratedColumn,
   CreateDateColumn,
+  UpdateDateColumn,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+
+export enum CommentStatus {
+  ACTIVE = 'ACTIVE',
+  REMOVED = 'REMOVED',
+}
 
 @Entity('comments')
 export class Comment {
@@ -15,14 +21,24 @@ export class Comment {
   @Column({ type: 'text' })
   content: string;
 
+  @Column({
+    type: 'enum',
+    enum: CommentStatus,
+    default: CommentStatus.ACTIVE,
+  })
+  status: CommentStatus;
+
   @CreateDateColumn()
   created_at: Date;
 
-  @ManyToOne('Post', 'comments', { onDelete: 'CASCADE' })
+  @UpdateDateColumn()
+  updated_at: Date;
+
+  @ManyToOne('Post', 'comments', { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
   post: any;
 
-  @ManyToOne('User', 'comments', { onDelete: 'CASCADE' })
+  @ManyToOne('User', 'comments', { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: any;
 }

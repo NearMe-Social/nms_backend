@@ -12,22 +12,32 @@ export enum ReportStatus {
   REVIEWED = 'REVIEWED',
 }
 
+export enum ReportTargetType {
+  POST = 'POST',
+  COMMENT = 'COMMENT',
+  USER = 'USER',
+  MESSAGE = 'MESSAGE',
+}
+
 @Entity('reports')
 export class Report {
   @PrimaryGeneratedColumn()
   report_id: number;
 
-  @ManyToOne(() => User, { onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'reporter_id' })
   reporter: User;
 
-  @Column()
-  target_type: string;
+  @Column({
+    type: 'enum',
+    enum: ReportTargetType,
+  })
+  target_type: ReportTargetType;
 
   @Column()
   target_id: number;
 
-  @Column()
+  @Column({ type: 'text' })
   reason: string;
 
   @Column({
@@ -47,8 +57,8 @@ export class Report {
   @Column({ type: 'timestamp', nullable: true })
   reviewed_at: Date;
 
-  @Column({ nullable: true })
-  moderator_note: string;
+  @Column({ type: 'text', nullable: true })
+  moderator_note: string | null;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at: Date;
