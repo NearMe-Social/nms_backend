@@ -3,12 +3,17 @@ import {InjectRepository} from '@nestjs/typeorm';
 import {Repository} from 'typeorm';
 import {Message} from './entities/message.entity';
 import {CreateMessageDto} from './dto/create-message.dto'
+import { ConversationParticipant } from '../conversations/entities/conversation-participant.entity';
 
 
 @Injectable()
 export class MessagesService {
     constructor(
+        @InjectRepository(Message)
         private readonly messageRopo : Repository<Message>,
+        
+        @InjectRepository(ConversationParticipant)
+        private readonly participantRepo: Repository<ConversationParticipant>,
     ){}
 
     async sendMessage(userId: number, dto: CreateMessageDto){
