@@ -9,11 +9,14 @@ import {
   ParseIntPipe,
   Patch,
   Post as HttpPost,
+  Query,
 } from '@nestjs/common';
+import { NearbyPostsQueryDto } from './dto/nearby-posts-query.dto';
+import { PostsQueryDto } from './dto/posts-query.dto';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { Post } from './entities/post.entities';
-import { PostsService } from './posts.service';
+import { NearbyPostResponse, PostsService } from './posts.service';
 
 @Controller('posts')
 export class PostsController {
@@ -26,8 +29,15 @@ export class PostsController {
   }
 
   @Get()
-  findAll(): Promise<Post[]> {
-    return this.postsService.findAll();
+  findAll(@Query() query: PostsQueryDto): Promise<Post[]> {
+    return this.postsService.findAll(query);
+  }
+
+  @Get('nearby')
+  findNearby(
+    @Query() query: NearbyPostsQueryDto,
+  ): Promise<NearbyPostResponse[]> {
+    return this.postsService.findNearby(query);
   }
 
   @Get(':postId')
@@ -45,7 +55,9 @@ export class PostsController {
 
   @Delete(':postId')
   @HttpCode(HttpStatus.OK)
-  remove(@Param('postId', ParseIntPipe) postId: number): Promise<{ message: string }> {
+  remove(
+    @Param('postId', ParseIntPipe) postId: number,
+  ): Promise<{ message: string }> {
     return this.postsService.remove(postId);
   }
 }
