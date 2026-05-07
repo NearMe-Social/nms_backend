@@ -27,6 +27,7 @@ interface RequestWithUser extends Request {
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Get('me')
   async getMyProfile(@Req() req: RequestWithUser) {
     return this.usersService.findById(req.user.userId);
@@ -46,6 +47,7 @@ export class UsersController {
     return this.usersService.findById(id);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch('me')
   async updateProfile(
     @Req() req: RequestWithUser,
