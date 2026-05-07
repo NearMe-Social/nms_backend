@@ -24,3 +24,12 @@ export class MessagesController {
     return this.messagesService.getMessages(req.user.userId, +conversationId);
   }
 }
+  @Post('conversation/:conversationId/seen')
+  markSeen(
+    @Req() req,
+    @Param('conversationId', ParseIntPipe) conversationId: number,
+  ) {
+    const userId = req.user.id;
+    return this.messageService.markAsSeen(userId, conversationId);
+  }
+}

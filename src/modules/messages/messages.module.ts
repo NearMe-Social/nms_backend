@@ -19,5 +19,7 @@ import { BlocksModule } from '../blocks/blocks.module';
   ],
   controllers: [MessagesController],
   providers: [MessagesService, ChatGateway],
+  exports: [MessagesService],
 })
+
 export class MessagesModule {}

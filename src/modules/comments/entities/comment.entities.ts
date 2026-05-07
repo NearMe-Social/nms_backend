@@ -16,10 +16,10 @@ export enum CommentStatus {
 @Entity('comments')
 export class Comment {
   @PrimaryGeneratedColumn()
-  comment_id: number;
+  comment_id!: number;
 
   @Column({ type: 'text' })
-  content: string;
+  content!: string;
 
   @Column({
     type: 'enum',
@@ -29,7 +29,7 @@ export class Comment {
   status: CommentStatus;
 
   @CreateDateColumn()
-  created_at: Date;
+  created_at!: Date;
 
   @UpdateDateColumn()
   updated_at: Date;
