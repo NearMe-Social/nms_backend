@@ -1,6 +1,19 @@
-import { Controller, Post, Get, Body, Param, UseGuards, Request } from '@nestjs/common';
-import { MessagesService } from './messages.service';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseIntPipe,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CreateMessageDto } from './dto/create-message.dto';
+import { QueryMessagesDto } from './dto/query-messages.dto';
+import { MessagesService } from './messages.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('conversations/:conversationId/messages')
@@ -9,27 +22,31 @@ export class MessagesController {
 
   @Post()
   sendMessage(
-    @Request() req: any,
-    @Param('conversationId') conversationId: string,
-    @Body('content') content: string,
+    @Req() req: any,
+    @Param('conversationId', ParseIntPipe) conversationId: number,
+    @Body() dto: CreateMessageDto,
   ) {
-    return this.messagesService.sendMessage(req.user.userId, +conversationId, content);
+    return this.messagesService.sendMessage(req.user.userId, conversationId, dto);
   }
 
   @Get()
   getMessages(
-    @Request() req: any,
-    @Param('conversationId') conversationId: string,
+    @Req() req: any,
+    @Param('conversationId', ParseIntPipe) conversationId: number,
+    @Query() query: QueryMessagesDto,
   ) {
-    return this.messagesService.getMessages(req.user.userId, +conversationId);
+    return this.messagesService.getMessages(
+      req.user.userId,
+      conversationId,
+      query,
+    );
   }
-}
-  @Post('conversation/:conversationId/seen')
+
+  @Patch('seen')
   markSeen(
-    @Req() req,
+    @Req() req: any,
     @Param('conversationId', ParseIntPipe) conversationId: number,
   ) {
-    const userId = req.user.id;
-    return this.messageService.markAsSeen(userId, conversationId);
+    return this.messagesService.markAsSeen(req.user.userId, conversationId);
   }
 }
