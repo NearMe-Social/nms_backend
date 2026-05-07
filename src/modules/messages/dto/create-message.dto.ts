@@ -1,10 +1,7 @@
-import {IsInt, IsString, MinLength} from 'class-validator';
+import { IsString, MinLength } from 'class-validator';
 
-export class CreateMessageDto{
-    @IsInt()
-    conversationId!: number;
-
-    @IsString()
-    @MinLength(1)
-    content!: string
+export class CreateMessageDto {
+  @IsString()
+  @MinLength(1)
+  content: string;
 }

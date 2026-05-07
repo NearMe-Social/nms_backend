@@ -44,7 +44,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // Join a conversation room
   @SubscribeMessage('joinConversation')
-  handleJoin(@MessageBody() conversationId: number, @ConnectedSocket() client: Socket) {
+  async handleJoin(
+    @MessageBody() conversationId: number,
+    @ConnectedSocket() client: Socket,
+  ) {
+    await this.messagesService.getMessages(client.data.userId, conversationId, {
+      page: 0,
+      size: 1,
+    });
     client.join(`conversation_${conversationId}`);
     return { event: 'joinedConversation', data: conversationId };
   }
@@ -57,7 +64,11 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const userId = client.data.userId;
     try {
-      const message = await this.messagesService.sendMessage(userId, data.conversationId, data.content);
+      const message = await this.messagesService.sendMessage(
+        userId,
+        data.conversationId,
+        { content: data.content },
+      );
       // Broadcast to all participants in the conversation room
       this.server.to(`conversation_${data.conversationId}`).emit('newMessage', message);
       return { success: true, message };
