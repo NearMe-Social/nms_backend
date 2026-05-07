@@ -59,11 +59,24 @@ export class MessagesService {
         };
     }
 
+    async isUserInConversation(userId: number, conversationId: number){
+        const participant = await this.participantRepo.findOne({
+            where: {
+                userId,
+                conversationId,
+            },
+        });
+
+        return Boolean(participant);
+    }
+
     async getLastesMessage(conversationId: number){
         const msg = await this.messageRopo.findOne({
             where: {conversationId},
             order: {createdAt: 'DESC'},
-        })
+        });
+
+        return msg;
     }
 
     async markAsSeen(userId: number, conversationId: number){

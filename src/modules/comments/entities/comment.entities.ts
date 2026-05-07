@@ -10,13 +10,13 @@ import {
 @Entity('comments')
 export class Comment {
   @PrimaryGeneratedColumn()
-  comment_id: number;
+  comment_id!: number;
 
   @Column({ type: 'text' })
-  content: string;
+  content!: string;
 
   @CreateDateColumn()
-  created_at: Date;
+  created_at!: Date;
 
   @ManyToOne('Post', 'comments', { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
