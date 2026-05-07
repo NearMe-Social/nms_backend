@@ -8,7 +8,7 @@ import {
   Min,
 } from 'class-validator';
 
-export class NearbyPostsQueryDto {
+export class NearbyUsersQueryDto {
   @Type(() => Number)
   @IsLatitude()
   lat: number;

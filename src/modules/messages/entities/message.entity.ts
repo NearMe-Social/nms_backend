@@ -1,38 +1,58 @@
 import {
-    Entity,
-    PrimaryGeneratedColumn,
-    Column,
-    ManyToOne,
-    JoinColumn,
-    CreateDateColumn
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  CreateDateColumn,
 } from 'typeorm';
 
 import { Conversation } from '../../conversations/entities/conversation.entities';
+import { User } from '../../users/entities/user.entity';
+
+export enum MessageStatus {
+  SENT = 'SENT',
+  DELETED = 'DELETED',
+}
 
 @Entity('messages')
 export class Message {
-    @PrimaryGeneratedColumn({name: 'message_id'})
-    messageId!: number;
+  @PrimaryGeneratedColumn()
+  message_id: number;
 
-    @Column({name : 'conversation_id'})
-    conversationId!: number;
+  @Column()
+  conversation_id: number;
 
-    @Column({name: 'sender_id'})
-    senderId!: number;
+  @Column()
+  sender_id: number;
 
-    @Column({type: 'text'})
-    content!: string;
+  @Column({ type: 'text' })
+  content: string;
 
-    @Column({type: 'varchar', length: 20, default: 'SENT'})
-    status!: 'SENT' | 'DELIVERD' | 'SEEN';
+  @Column({
+    type: 'enum',
+    enum: MessageStatus,
+    default: MessageStatus.SENT,
+  })
+  status: MessageStatus;
 
-    @Column({name: 'read_at', type: 'timestamp', nullable: true})
-    readAt? : Date;
+  @Column({ type: 'timestamp', nullable: true })
+  read_at: Date | null;
 
-    @CreateDateColumn({name : 'create_at'})
-    createdAt! : Date;
+  @CreateDateColumn()
+  created_at: Date;
 
-    @ManyToOne(() => Conversation, (c) => c.messages)
-    @JoinColumn({ name: 'conversation_id' })
-    conversation!: Conversation;
+  @ManyToOne(() => Conversation, (c) => c.messages, {
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'conversation_id' })
+  conversation: Conversation;
+
+  @ManyToOne(() => User, {
+    nullable: false,
+    onDelete: 'CASCADE',
+  })
+  @JoinColumn({ name: 'sender_id' })
+  sender: User;
 }
