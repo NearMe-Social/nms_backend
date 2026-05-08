@@ -26,13 +26,13 @@ export class Comment {
     enum: CommentStatus,
     default: CommentStatus.ACTIVE,
   })
-  status: CommentStatus;
+  status!: CommentStatus;
 
   @CreateDateColumn()
   created_at!: Date;
 
   @UpdateDateColumn()
-  updated_at: Date;
+  updated_at!: Date;
 
   @ManyToOne('Post', 'comments', { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
