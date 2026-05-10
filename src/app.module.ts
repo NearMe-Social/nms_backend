@@ -1,9 +1,6 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { typeOrmConfig } from './config/typeorm.config';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -17,18 +14,35 @@ import { MessagesModule } from './modules/messages/messages.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 
+
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST || 'postgres',
-      port: parseInt(process.env.DB_PORT as string) || 5432,
-      username: process.env.DB_USERNAME || 'nearme_user',
-      password: process.env.DB_PASSWORD || 'nearme_pass',
-      database: process.env.DB_NAME || 'nearme_social',
-      entities: [__dirname + '/**/*.{entity,entities}{.ts,.js}'],
-      logging: true,
+    ConfigModule.forRoot({
+      isGlobal: true,
     }),
+
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        type: 'postgres',
+        url: config.get<string>('DB_URL'),
+
+        ssl: {
+          rejectUnauthorized: false,
+        },
+
+        entities: [__dirname + '/**/*.entity{.ts,.js}',
+                  __dirname + '/**/*.entities{.ts,.js}'
+        ],
+        migrations: [__dirname + '/migrations/*{.ts,.js}'],
+
+        synchronize: false,
+        migrationsRun: false,
+
+        logging: config.get<string>('NODE_ENV') !== 'production',
+      }),
+    }),
+
     UsersModule,
     AuthModule,
     PostsModule,
