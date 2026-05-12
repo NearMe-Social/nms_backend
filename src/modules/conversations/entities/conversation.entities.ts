@@ -1,8 +1,9 @@
 import {
   Entity,
   PrimaryGeneratedColumn,
-  Column,
   OneToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { ConversationParticipant } from './conversation-participant.entity';
 import { Message } from '../../messages/entities/message.entity';
@@ -11,8 +12,11 @@ export class Conversation {
   @PrimaryGeneratedColumn()
   conversation_id: number;
 
-  @Column()
-  type: string;
+  @CreateDateColumn()
+  created_at: Date;
+
+  @UpdateDateColumn()
+  updated_at: Date;
 
   @OneToMany(() => ConversationParticipant, (p) => p.conversation)
   participants: ConversationParticipant[];
