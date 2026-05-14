@@ -13,6 +13,7 @@ export class ReportsService {
 
   async create(createReportDto: CreateReportDto): Promise<Report> {
     const report = this.reportsRepository.create({
+      reporter: { user_id: createReportDto.reporter_id },
       target_type: createReportDto.target_type,
       target_id: createReportDto.target_id,
       reason: createReportDto.reason,

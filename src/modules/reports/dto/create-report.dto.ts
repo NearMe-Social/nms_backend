@@ -2,6 +2,10 @@ import { IsEnum, IsInt, IsNotEmpty, IsString, MinLength } from 'class-validator'
 import { ReportTargetType } from '../entities/report.entities';
 
 export class CreateReportDto {
+  @IsInt()
+  @IsNotEmpty()
+  reporter_id: number;
+
   @IsEnum(ReportTargetType, {
     message: `target_type must be one of: ${Object.values(ReportTargetType).join(', ')}`,
   })
