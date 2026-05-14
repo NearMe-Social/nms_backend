@@ -2,8 +2,6 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmConfig } from './config/typeorm.config';
-import { AuthModule } from './auth/auth.module';
-import { UsersModule } from './users/users.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -19,16 +17,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST || 'postgres',
-      port: parseInt(process.env.DB_PORT as string) || 5432,
-      username: process.env.DB_USERNAME || 'nearme_user',
-      password: process.env.DB_PASSWORD || 'nearme_pass',
-      database: process.env.DB_NAME || 'nearme_social',
-      entities: [__dirname + '/**/*.{entity,entities}{.ts,.js}'],
-      logging: true,
-    }),
+    ConfigModule.forRoot({ isGlobal: true }),
+    TypeOrmModule.forRoot(typeOrmConfig()),
     UsersModule,
     AuthModule,
     PostsModule,
@@ -39,7 +29,6 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     ConversationsModule,
     NotificationsModule,
   ],
-
   controllers: [AppController],
   providers: [AppService],
 })
