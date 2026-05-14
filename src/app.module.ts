@@ -13,6 +13,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 
 @Module({
@@ -52,6 +53,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     MessagesModule,
     ConversationsModule,
     NotificationsModule,
+    AdminModule
   ],
 
   controllers: [AppController],
