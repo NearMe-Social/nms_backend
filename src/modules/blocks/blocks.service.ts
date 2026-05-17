@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserBlock } from './entities/user-block.entity';
@@ -30,6 +30,23 @@ export class BlocksService {
  
     return this.blockRepo.save(block);
   }
+
+  async unblock(blockerId: number, blockedUserId: number): Promise<{ message: string }> {
+    const block = await this.blockRepo.findOne({
+      where: {
+        blocker: { user_id: blockerId },
+        blockedUser: { user_id: blockedUserId },
+      },
+    });
+ 
+    if (!block) {
+      throw new NotFoundException('Block relationship not found');
+    }
+ 
+    await this.blockRepo.remove(block);
+    return { message: 'User unblocked successfully' };
+  }
+
 
 
   async isBlocked(blockerId: number, blockedUserId: number): Promise<boolean> {
