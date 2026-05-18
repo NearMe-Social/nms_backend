@@ -4,12 +4,18 @@ import { Repository } from 'typeorm';
 import { Comment } from './entities/comment.entities';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
+import { Post } from '../posts/entities/post.entities';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entities';
 
 @Injectable()
 export class CommentsService {
   constructor(
     @InjectRepository(Comment)
     private readonly commentsRepository: Repository<Comment>,
+    @InjectRepository(Post)
+    private readonly postsRepository: Repository<Post>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(createCommentDto: CreateCommentDto): Promise<Comment> {
@@ -20,7 +26,22 @@ export class CommentsService {
         user: { user_id: createCommentDto.user_id },
       });
 
-      return await this.commentsRepository.save(comment);
+      const savedComment = await this.commentsRepository.save(comment);
+      const post = await this.postsRepository.findOne({
+        where: { post_id: createCommentDto.post_id },
+        relations: ['user'],
+      });
+
+      if (post?.user?.user_id && post.user.user_id !== createCommentDto.user_id) {
+        await this.notificationsService.createNotification({
+          user_id: post.user.user_id,
+          type: NotificationType.COMMENT,
+          related_id: savedComment.comment_id,
+          message: 'New comment on your post',
+        });
+      }
+
+      return savedComment;
     } catch {
       throw new BadRequestException('Failed to create comment');
     }

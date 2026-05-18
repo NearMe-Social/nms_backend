@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BlocksService } from '../blocks/blocks.service';
 import { ConversationsService } from '../conversations/conversations.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { Message } from './entities/message.entity';
 import { MessagesService } from './messages.service';
 
@@ -32,6 +33,12 @@ describe('MessagesService', () => {
           provide: BlocksService,
           useValue: {
             isEitherBlocked: jest.fn(),
+          },
+        },
+        {
+          provide: NotificationsService,
+          useValue: {
+            createNotification: jest.fn(),
           },
         },
       ],
