@@ -52,10 +52,10 @@ export class Report {
     onDelete: 'SET NULL',
   })
   @JoinColumn({ name: 'reviewed_by' })
-  reviewedBy: User;
+  reviewedBy: User | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  reviewed_at: Date;
+  reviewed_at: Date | null;
 
   @Column({ type: 'text', nullable: true })
   moderator_note: string | null;
