@@ -3,7 +3,6 @@ import { IsEnum } from 'class-validator';
 export enum AdminContentTargetType {
   POST = 'POST',
   COMMENT = 'COMMENT',
-  MESSAGE = 'MESSAGE',
 }
 
 export enum AdminContentAction {

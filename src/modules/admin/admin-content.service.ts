@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Comment, CommentStatus } from '../comments/entities/comment.entities';
-import { Message, MessageStatus } from '../messages/entities/message.entity';
 import { Post, PostStatus } from '../posts/entities/post.entities';
 import {
   Report,
@@ -23,8 +22,6 @@ export class AdminContentService {
     private readonly postRepo: Repository<Post>,
     @InjectRepository(Comment)
     private readonly commentRepo: Repository<Comment>,
-    @InjectRepository(Message)
-    private readonly messageRepo: Repository<Message>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
   ) {}
@@ -99,23 +96,7 @@ export class AdminContentService {
       return this.toCommentSnapshot(savedComment);
     }
 
-    const message = await this.messageRepo.findOne({
-      where: { message_id: targetId },
-      relations: { sender: true },
-    });
-
-    if (!message) {
-      throw new NotFoundException('Message not found');
-    }
-
-    message.status =
-      action === AdminContentAction.RESTORE
-        ? MessageStatus.SENT
-        : MessageStatus.DELETED;
-
-    const savedMessage = await this.messageRepo.save(message);
-
-    return this.toMessageSnapshot(savedMessage);
+    throw new BadRequestException('Private chat messages cannot be moderated through admin content actions');
   }
 
   private async getTargetSnapshot(targetType: ReportTargetType, targetId: number) {
@@ -138,12 +119,12 @@ export class AdminContentService {
     }
 
     if (targetType === ReportTargetType.MESSAGE) {
-      const message = await this.messageRepo.findOne({
-        where: { message_id: targetId },
-        relations: { sender: true },
-      });
-
-      return message ? this.toMessageSnapshot(message) : null;
+      return {
+        type: ReportTargetType.MESSAGE,
+        id: targetId,
+        content: null,
+        note: 'Private message content is hidden from admin flagged-content snapshots.',
+      };
     }
 
     const user = await this.userRepo.findOne({
@@ -212,23 +193,6 @@ export class AdminContentService {
         : null,
       createdAt: comment.created_at,
       updatedAt: comment.updated_at,
-    };
-  }
-
-  private toMessageSnapshot(message: Message) {
-    return {
-      type: AdminContentTargetType.MESSAGE,
-      id: message.message_id,
-      conversationId: message.conversation_id,
-      content: message.content,
-      status: message.status,
-      sender: message.sender
-        ? {
-            userId: message.sender.user_id,
-            username: message.sender.username,
-          }
-        : null,
-      createdAt: message.created_at,
     };
   }
 
