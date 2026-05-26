@@ -47,7 +47,10 @@ export class MessagesService {
       content: dto.content,
     });
 
-    return this.messageRepo.save(message);
+    const savedMessage = await this.messageRepo.save(message);
+    await this.conversationsService.touchConversation(conversationId);
+
+    return savedMessage;
   }
 
   async getMessages(
@@ -90,6 +93,21 @@ export class MessagesService {
       .execute();
 
     return { success: true };
+  }
+
+  async getConversationParticipantIds(
+    conversationId: number,
+  ): Promise<number[]> {
+    return this.conversationsService.getConversationParticipantIds(
+      conversationId,
+    );
+  }
+
+  async assertCanAccessConversation(
+    userId: number,
+    conversationId: number,
+  ): Promise<void> {
+    await this.ensureCanAccessConversation(userId, conversationId);
   }
 
   private async ensureCanAccessConversation(
