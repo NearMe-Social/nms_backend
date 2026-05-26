@@ -47,7 +47,10 @@ export class MessagesService {
       content: dto.content,
     });
 
-    return this.messageRepo.save(message);
+    const savedMessage = await this.messageRepo.save(message);
+    await this.conversationsService.touchConversation(conversationId);
+
+    return savedMessage;
   }
 
   async getMessages(
