@@ -20,7 +20,14 @@ export class ConversationsService {
   ): Promise<Conversation> {
     const participantIds = Array.from(
       new Set([creatorId, ...dto.participantIds]),
-    );
+    ).sort((a, b) => a - b);
+
+    const existingConversationId =
+      await this.findExistingConversationId(participantIds);
+
+    if (existingConversationId) {
+      return this.findOneForUser(existingConversationId, creatorId);
+    }
 
     const conversation = await this.conversationRepo.save(
       this.conversationRepo.create(),
@@ -83,6 +90,44 @@ export class ConversationsService {
     });
 
     return participants.map((participant) => participant.user_id);
+  }
+
+  async touchConversation(conversationId: number): Promise<void> {
+    await this.conversationRepo.update(conversationId, {
+      updated_at: new Date(),
+    });
+  }
+
+  private async findExistingConversationId(
+    participantIds: number[],
+  ): Promise<number | null> {
+    const matchingParticipants = await this.participantRepo.find({
+      where: { user_id: In(participantIds) },
+    });
+
+    const candidateConversationIds = Array.from(
+      new Set(
+        matchingParticipants.map((participant) => participant.conversation_id),
+      ),
+    );
+
+    for (const conversationId of candidateConversationIds) {
+      const participants = await this.participantRepo.find({
+        where: { conversation_id: conversationId },
+      });
+      const ids = participants
+        .map((participant) => participant.user_id)
+        .sort((a, b) => a - b);
+
+      if (
+        ids.length === participantIds.length &&
+        ids.every((id, index) => id === participantIds[index])
+      ) {
+        return conversationId;
+      }
+    }
+
+    return null;
   }
 
   private async assertParticipant(conversationId: number, userId: number) {
