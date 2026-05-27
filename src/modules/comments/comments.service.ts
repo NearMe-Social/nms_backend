@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Comment } from './entities/comment.entities';
+import { Comment, CommentStatus } from './entities/comment.entities';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 import { Post } from '../posts/entities/post.entities';
@@ -56,7 +56,7 @@ export class CommentsService {
 
   findByPost(postId: number): Promise<Comment[]> {
     return this.commentsRepository.find({
-      where: { post: { post_id: postId } },
+      where: { post: { post_id: postId }, status: CommentStatus.ACTIVE },
       relations: ['user'],
       order: { created_at: 'DESC' },
     });
@@ -64,7 +64,7 @@ export class CommentsService {
 
   findByUser(userId: number): Promise<Comment[]> {
     return this.commentsRepository.find({
-      where: { user: { user_id: userId } },
+      where: { user: { user_id: userId }, status: CommentStatus.ACTIVE },
       relations: ['post'],
       order: { created_at: 'DESC' },
     });
@@ -72,7 +72,7 @@ export class CommentsService {
 
   countByPost(postId: number): Promise<number> {
     return this.commentsRepository.count({
-      where: { post: { post_id: postId } },
+      where: { post: { post_id: postId }, status: CommentStatus.ACTIVE },
     });
   }
 
