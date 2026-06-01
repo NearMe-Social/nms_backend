@@ -31,6 +31,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         secret: process.env.JWT_SECRET || 'change_this_secret',
       });
       client.data.userId = payload.sub;
+      client.join(`user_${payload.sub}`);
       console.log(`Client connected: userId=${payload.sub}`);
     } catch {
       console.log('Unauthorized WebSocket connection, disconnecting...');
@@ -56,6 +57,67 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { event: 'joinedConversation', data: conversationId };
   }
 
+  @SubscribeMessage('leaveConversation')
+  handleLeave(
+    @MessageBody() conversationId: number,
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.leave(`conversation_${conversationId}`);
+    client
+      .to(`conversation_${conversationId}`)
+      .emit('typingStopped', {
+        conversationId,
+        userId: client.data.userId,
+      });
+    return { event: 'leftConversation', data: conversationId };
+  }
+
+  @SubscribeMessage('typingStarted')
+  async handleTypingStarted(
+    @MessageBody() data: { conversationId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    await this.messagesService.assertCanAccessConversation(
+      client.data.userId,
+      data.conversationId,
+    );
+    client.to(`conversation_${data.conversationId}`).emit('typingStarted', {
+      conversationId: data.conversationId,
+      userId: client.data.userId,
+    });
+  }
+
+  @SubscribeMessage('typingStopped')
+  async handleTypingStopped(
+    @MessageBody() data: { conversationId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    await this.messagesService.assertCanAccessConversation(
+      client.data.userId,
+      data.conversationId,
+    );
+    client.to(`conversation_${data.conversationId}`).emit('typingStopped', {
+      conversationId: data.conversationId,
+      userId: client.data.userId,
+    });
+  }
+
+  @SubscribeMessage('markSeen')
+  async handleMarkSeen(
+    @MessageBody() data: { conversationId: number },
+    @ConnectedSocket() client: Socket,
+  ) {
+    await this.messagesService.markAsSeen(
+      client.data.userId,
+      data.conversationId,
+    );
+    this.server.to(`conversation_${data.conversationId}`).emit('messagesSeen', {
+      conversationId: data.conversationId,
+      userId: client.data.userId,
+      readAt: new Date().toISOString(),
+    });
+  }
+
   // Send a message via WebSocket
   @SubscribeMessage('sendMessage')
   async handleMessage(
@@ -69,8 +131,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         data.conversationId,
         { content: data.content, conversation_id: data.conversationId },
       );
-      // Broadcast to all participants in the conversation room
-      this.server.to(`conversation_${data.conversationId}`).emit('newMessage', message);
+      const participantIds =
+        await this.messagesService.getConversationParticipantIds(
+          data.conversationId,
+        );
+
+      participantIds.forEach((participantId) => {
+        this.server.to(`user_${participantId}`).emit('newMessage', message);
+      });
+
       return { success: true, message };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

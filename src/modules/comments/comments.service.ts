@@ -1,15 +1,21 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Comment } from './entities/comment.entities';
+import { Comment, CommentStatus } from './entities/comment.entities';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
+import { Post } from '../posts/entities/post.entities';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entities';
 
 @Injectable()
 export class CommentsService {
   constructor(
     @InjectRepository(Comment)
     private readonly commentsRepository: Repository<Comment>,
+    @InjectRepository(Post)
+    private readonly postsRepository: Repository<Post>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(createCommentDto: CreateCommentDto): Promise<Comment> {
@@ -20,7 +26,22 @@ export class CommentsService {
         user: { user_id: createCommentDto.user_id },
       });
 
-      return await this.commentsRepository.save(comment);
+      const savedComment = await this.commentsRepository.save(comment);
+      const post = await this.postsRepository.findOne({
+        where: { post_id: createCommentDto.post_id },
+        relations: ['user'],
+      });
+
+      if (post?.user?.user_id && post.user.user_id !== createCommentDto.user_id) {
+        await this.notificationsService.createNotification({
+          user_id: post.user.user_id,
+          type: NotificationType.COMMENT,
+          related_id: savedComment.comment_id,
+          message: 'New comment on your post',
+        });
+      }
+
+      return savedComment;
     } catch {
       throw new BadRequestException('Failed to create comment');
     }
@@ -35,7 +56,7 @@ export class CommentsService {
 
   findByPost(postId: number): Promise<Comment[]> {
     return this.commentsRepository.find({
-      where: { post: { post_id: postId } },
+      where: { post: { post_id: postId }, status: CommentStatus.ACTIVE },
       relations: ['user'],
       order: { created_at: 'DESC' },
     });
@@ -43,7 +64,7 @@ export class CommentsService {
 
   findByUser(userId: number): Promise<Comment[]> {
     return this.commentsRepository.find({
-      where: { user: { user_id: userId } },
+      where: { user: { user_id: userId }, status: CommentStatus.ACTIVE },
       relations: ['post'],
       order: { created_at: 'DESC' },
     });
@@ -51,7 +72,7 @@ export class CommentsService {
 
   countByPost(postId: number): Promise<number> {
     return this.commentsRepository.count({
-      where: { post: { post_id: postId } },
+      where: { post: { post_id: postId }, status: CommentStatus.ACTIVE },
     });
   }
 

@@ -1,58 +1,49 @@
 import {
-  Controller,
-  UseGuards,
-  Get,
-  Req,
-  Post,
-  Body,
+	Body,
+	Controller,
+	Get,
+	Param,
+	ParseIntPipe,
+	Patch,
+	Query,
+	Req,
+	UseGuards,
 } from '@nestjs/common';
-
-import { NotificationsService } from './notifications.service';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { MarkNotificationReadDto } from './dto/mark-notification-read.dto';
+import { NotificationsQueryDto } from './dto/notifications-query.dto';
+import { NotificationsService } from './notifications.service';
 
+interface RequestWithUser extends Request {
+	user: { userId: number };
+}
+
+@UseGuards(JwtAuthGuard)
 @Controller('notifications')
 export class NotificationsController {
+	constructor(private readonly notificationsService: NotificationsService) {}
 
-  constructor(
-    private readonly notificationsService: NotificationsService,
-  ) {}
+	@Get()
+	getMyNotifications(
+		@Req() req: RequestWithUser,
+		@Query() query: NotificationsQueryDto,
+	) {
+		return this.notificationsService.getNotificationsByUser(
+			req.user.userId,
+			query,
+		);
+	}
 
-  @UseGuards(JwtAuthGuard)
-  @Get()
-  async getMyNotifications(
-    @Req() req: any,
-  ) {
-
-    const userId = req.user.user_id;
-
-    const notifications =
-      await this.notificationsService.getNotificationsByUser(userId);
-
-    return {
-      success: true,
-      message: 'Notifications retrieved successfully',
-      data: notifications,
-    };
-  }
-
-  @Post()
-  async createNotification(
-    @Body() body: any,
-  ) {
-
-    const notification =
-      await this.notificationsService.createNotification(
-        body.user_id,
-        body.type,
-        body.related_id,
-        body.message,
-      );
-
-    return {
-      success: true,
-      message: 'Notification created successfully',
-      data: notification,
-    };
-  }
-
+	@Patch(':notificationId/read')
+	markRead(
+		@Req() req: RequestWithUser,
+		@Param('notificationId', ParseIntPipe) notificationId: number,
+		@Body() _dto: MarkNotificationReadDto,
+	) {
+		return this.notificationsService.markAsRead(
+			req.user.userId,
+			notificationId,
+		);
+	}
 }
