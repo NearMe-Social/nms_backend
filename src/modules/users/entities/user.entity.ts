@@ -42,8 +42,17 @@ export class User {
   last_name!: string;
 
   @Exclude()
-  @Column()
-  password_hash!: string;
+  @Column({
+    type: 'varchar',
+    nullable: true
+  })
+  password_hash!: string | null;
+
+  // @Column({
+  //   nullable: true,
+  //   default: 'local'
+  // })
+  // provider !: string;
 
   @Column({ type: 'date', nullable: true })
   birthday!: Date | null;
