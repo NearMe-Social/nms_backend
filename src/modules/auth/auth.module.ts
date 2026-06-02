@@ -3,7 +3,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import type { SignOptions } from 'jsonwebtoken';
 import { TypeOrmModule } from '@nestjs/typeorm';
-
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -11,8 +10,8 @@ import { User } from '../users/entities/user.entity';
 
 @Module({
   imports: [
+    ConfigModule,
     TypeOrmModule.forFeature([User]),
-
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -20,17 +19,13 @@ import { User } from '../users/entities/user.entity';
         const expiresIn = (
           config.get<string>('JWT_EXPIRES_IN') || '24h'
         ) as SignOptions['expiresIn'];
-
         return {
           secret: config.getOrThrow<string>('JWT_SECRET'),
-          signOptions: {
-            expiresIn,
-          },
+          signOptions: { expiresIn },
         };
       },
     }),
   ],
-
   providers: [AuthService, JwtStrategy],
   controllers: [AuthController],
   exports: [AuthService],
