@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BlocksService } from '../blocks/blocks.service';
 import { ConversationsService } from '../conversations/conversations.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/entities/notification.entities';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { QueryMessagesDto } from './dto/query-messages.dto';
 import { Message } from './entities/message.entity';
@@ -14,6 +16,7 @@ export class MessagesService {
     private readonly messageRepo: Repository<Message>,
     private readonly conversationsService: ConversationsService,
     private readonly blocksService: BlocksService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async sendMessage(
@@ -48,6 +51,20 @@ export class MessagesService {
     });
 
     const savedMessage = await this.messageRepo.save(message);
+    const recipientIds = participantIds.filter(
+      (participantId) => participantId !== senderId,
+    );
+
+    await Promise.all(
+      recipientIds.map((recipientId) =>
+        this.notificationsService.createNotification({
+          user_id: recipientId,
+          type: NotificationType.MESSAGE,
+          related_id: savedMessage.message_id,
+          message: 'New message',
+        }),
+      ),
+    );
     await this.conversationsService.touchConversation(conversationId);
 
     return savedMessage;
