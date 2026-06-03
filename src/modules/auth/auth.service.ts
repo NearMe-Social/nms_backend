@@ -108,32 +108,39 @@ export class AuthService {
     // store OTP
     this.otpStore.set(email, { otp, expiresAt });
 
-    // send email
-    const transporter = nodemailer.createTransport({
-      host: this.configService.get<string>('MAIL_HOST'),
-      port: this.configService.get<number>('MAIL_PORT'),
-      auth: {
-        user: this.configService.get<string>('MAIL_USER'),
-        pass: this.configService.get<string>('MAIL_PASS'),
-      },
-    });
+    try {
+      // send email
+      const transporter = nodemailer.createTransport({
+        host: this.configService.get<string>('MAIL_HOST'),
+        port: this.configService.get<number>('MAIL_PORT'),
+        auth: {
+          user: this.configService.get<string>('MAIL_USER'),
+          pass: this.configService.get<string>('MAIL_PASS'),
+        },
+      });
 
-    await transporter.sendMail({
-      from: this.configService.get<string>('MAIL_FROM'),
-      to: email,
-      subject: 'Your NearMe Social OTP Code',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto;">
-          <h2 style="color: #0c9081;">NearMe Social</h2>
-          <p>Your verification code is:</p>
-          <h1 style="letter-spacing: 8px; color: #1a1a2e; font-size: 36px;">${otp}</h1>
-          <p style="color: #666;">This code expires in <strong>10 minutes</strong>.</p>
-          <p style="color: #999; font-size: 12px;">If you didn't request this, please ignore this email.</p>
-        </div>
-      `,
-    });
+      await transporter.sendMail({
+        from: this.configService.get<string>('MAIL_FROM'),
+        to: email,
+        subject: 'Your NearMe Social OTP Code',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto;">
+            <h2 style="color: #0c9081;">NearMe Social</h2>
+            <p>Your verification code is:</p>
+            <h1 style="letter-spacing: 8px; color: #1a1a2e; font-size: 36px;">${otp}</h1>
+            <p style="color: #666;">This code expires in <strong>10 minutes</strong>.</p>
+            <p style="color: #999; font-size: 12px;">If you didn't request this, please ignore this email.</p>
+          </div>
+        `,
+      });
 
-    return { message: 'OTP sent successfully' };
+      console.log(`[OTP] Email sent successfully to ${email}`);
+      return { message: 'OTP sent successfully' };
+    } catch (error: any) {
+      console.error(`[OTP ERROR] Failed to send OTP to ${email}:`, error.message);
+      this.otpStore.delete(email); // Clean up on failure
+      throw new BadRequestException(`Failed to send OTP: ${error.message}`);
+    }
   }
 
   // ── NEW: verify OTP ──
