@@ -7,6 +7,7 @@ import { ChatGateway } from './chat.gateway';
 import { Message } from './entities/message.entity';
 import { ConversationsModule } from '../conversations/conversations.module';
 import { BlocksModule } from '../blocks/blocks.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { BlocksModule } from '../blocks/blocks.module';
     }),
     ConversationsModule,
     BlocksModule,
+    NotificationsModule,
   ],
   controllers: [MessagesController],
   providers: [MessagesService, ChatGateway],
