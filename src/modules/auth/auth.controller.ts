@@ -1,15 +1,16 @@
-import { Controller, UseGuards } from '@nestjs/common';
+import { Controller, UseGuards, Body, Post, Get, Request, Res } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { Body, Post } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { SendOtpDto, VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Get, Request } from '@nestjs/common';
+import {GoogleAuthGuard} from './guards/google.auth.guard';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
-  
+
   @Post('register')
   register(@Body() registerDto: RegisterDto) {
     return this.authService.register(registerDto);
@@ -22,7 +23,37 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getCurrentuser(@Request() req:any) {
+  getCurrentUser(@Request() req: any) {
     return this.authService.getCurrentUser(req.user.userId);
+  }
+
+  @UseGuards(GoogleAuthGuard)
+  @Get('google')
+  googleAuth(){}
+
+  @UseGuards(GoogleAuthGuard)
+  @Get('google/callback')
+async googleAuthCallback(
+  @Request() req: any,
+  @Res() res: any,
+) {
+  const result = await this.authService.googleLogin(
+    req.user,
+  );
+
+  return res.redirect(
+    `http://localhost:5173/auth/google/callback?token=${result.token}`,
+  );
+}
+
+  // ── NEW OTP endpoints ──
+  @Post('send-otp')
+  sendOtp(@Body() dto: SendOtpDto) {
+    return this.authService.sendOtp(dto.email);
+  }
+
+  @Post('verify-otp')
+  verifyOtp(@Body() dto: VerifyOtpDto) {
+    return this.authService.verifyOtp(dto.email, dto.otp);
   }
 }

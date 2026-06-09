@@ -19,17 +19,17 @@ export enum ReactionType {
 @Entity('reactions')
 export class Reaction {
   @PrimaryGeneratedColumn()
-  reaction_id: number;
+  reaction_id!: number;
 
   @Column({
     type: 'enum',
     enum: ReactionType,
     default: ReactionType.LIKE,
   })
-  type: ReactionType;
+  type!: ReactionType;
 
   @CreateDateColumn()
-  created_at: Date;
+  created_at!: Date;
 
   @ManyToOne('Post', 'reactions', { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
