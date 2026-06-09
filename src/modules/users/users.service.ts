@@ -17,6 +17,14 @@ export interface NearbyUserResponse {
   location_updated_at: Date | null;
 }
 
+export interface UserSearchResponse {
+  user_id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+  profile_image: string | null;
+}
+
 interface NearbyUserRaw {
   user_id: number | string;
   username: string;
@@ -55,6 +63,35 @@ export class UsersService {
     if (dto.profile_image !== undefined) user.profile_image = dto.profile_image;
 
     return this.usersRepository.save(user);
+  }
+
+  async search(
+    query: string,
+    currentUserId: number,
+  ): Promise<UserSearchResponse[]> {
+    const search = `%${this.escapeLikePattern(query)}%`;
+
+    return this.usersRepository
+      .createQueryBuilder('search_user')
+      .select('search_user.user_id', 'user_id')
+      .addSelect('search_user.username', 'username')
+      .addSelect('search_user.first_name', 'first_name')
+      .addSelect('search_user.last_name', 'last_name')
+      .addSelect('search_user.profile_image', 'profile_image')
+      .where('search_user.is_active = true')
+      .andWhere('search_user.role = :role', { role: UserRole.USER })
+      .andWhere('search_user.user_id != :currentUserId', { currentUserId })
+      .andWhere(
+        `(
+          search_user.username ILIKE :search ESCAPE '\\' OR
+          search_user.first_name ILIKE :search ESCAPE '\\' OR
+          search_user.last_name ILIKE :search ESCAPE '\\'
+        )`,
+        { search },
+      )
+      .orderBy('search_user.username', 'ASC')
+      .limit(5)
+      .getRawMany<UserSearchResponse>();
   }
 
   async updateLocation(
@@ -143,5 +180,9 @@ export class UsersService {
 
   private distanceLabel(distance: number): string {
     return `within ${distance}m`;
+  }
+
+  private escapeLikePattern(value: string): string {
+    return value.replace(/[\\%_]/g, '\\$&');
   }
 }

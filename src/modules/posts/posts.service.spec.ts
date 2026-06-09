@@ -19,6 +19,7 @@ describe('PostsService', () => {
     setParameters: jest.Mock;
     orderBy: jest.Mock;
     addOrderBy: jest.Mock;
+    limit: jest.Mock;
     getMany: jest.Mock;
     getRawMany: jest.Mock;
   };
@@ -38,6 +39,7 @@ describe('PostsService', () => {
       setParameters: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
       getMany: jest.fn(),
       getRawMany: jest.fn(),
     };
@@ -134,5 +136,20 @@ describe('PostsService', () => {
       'post.created_at',
       'DESC',
     );
+  });
+
+  it('should search only active unexpired posts and limit results', async () => {
+    queryBuilder.getMany.mockResolvedValue([]);
+
+    await service.search('road');
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'search_post.status = :status',
+      { status: 'ACTIVE' },
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'search_post.expires_at > NOW()',
+    );
+    expect(queryBuilder.limit).toHaveBeenCalledWith(5);
   });
 });

@@ -108,6 +108,29 @@ export class PostsService {
     });
   }
 
+  search(query: string): Promise<Post[]> {
+    const search = `%${this.escapeLikePattern(query)}%`;
+
+    return this.postsRepository
+      .createQueryBuilder('search_post')
+      .leftJoinAndSelect('search_post.user', 'user')
+      .leftJoinAndSelect('search_post.comments', 'comments')
+      .leftJoinAndSelect('search_post.reactions', 'reactions')
+      .where('search_post.status = :status', { status: PostStatus.ACTIVE })
+      .andWhere('search_post.expires_at > NOW()')
+      .andWhere(
+        `(
+          search_post.title ILIKE :search ESCAPE '\\' OR
+          search_post.content ILIKE :search ESCAPE '\\' OR
+          user.username ILIKE :search ESCAPE '\\'
+        )`,
+        { search },
+      )
+      .orderBy('search_post.created_at', 'DESC')
+      .limit(5)
+      .getMany();
+  }
+
   async findNearby(query: NearbyPostsQueryDto): Promise<NearbyPostResponse[]> {
     const radius = query.radius ?? 200;
 
@@ -255,5 +278,9 @@ export class PostsService {
 
   private distanceLabel(distance: number): string {
     return `within ${distance}m`;
+  }
+
+  private escapeLikePattern(value: string): string {
+    return value.replace(/[\\%_]/g, '\\$&');
   }
 }
