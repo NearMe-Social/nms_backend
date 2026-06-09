@@ -58,7 +58,6 @@ describe('NotificationsController', () => {
       controller.markRead(
         { user: { userId: 5 } } as any,
         9,
-        { is_read: true },
       ),
     ).resolves.toEqual({ notification_id: 9, is_read: true });
 
