@@ -7,6 +7,7 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { exhaustMap } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
 
@@ -62,31 +63,92 @@ export class AuthService {
 
   // ── existing login ──
   async login(loginDto: LoginDto) {
-    const user = await this.userRepository.findOne({
-      where: { email: loginDto.email },
-    });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
-    const passwordMatched = await bcrypt.compare(loginDto.password, user.password_hash);
-    if (!passwordMatched) throw new UnauthorizedException('Invalid password');
-    if (!user.is_active) throw new UnauthorizedException('Account is inactive');
-    const payload = {
-      sub: user.user_id,
-      email: user.email,
-      role: user.role,
-    };
-    return {
-      message: 'Login successful',
-      token: this.jwtService.sign(payload),
-      user: {
-        userId: user.user_id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-    };
+  const user = await this.userRepository.findOne({
+    where: { email: loginDto.email },
+  });
+
+  if (!user) {
+    throw new UnauthorizedException('Invalid credentials');
   }
 
-  // ── existing getCurrentUser ──
+  
+  if (!user.password_hash) {
+    throw new UnauthorizedException(
+      'This account uses Google login. Please sign in with Google.',
+    );
+  }
+
+  const passwordMatched = await bcrypt.compare(
+    loginDto.password,
+    user.password_hash,
+  );
+
+  if (!passwordMatched) {
+    throw new UnauthorizedException('Invalid password');
+  }
+
+  if (!user.is_active) {
+    throw new UnauthorizedException('Account is inactive');
+  }
+
+  const payload = {
+    sub: user.user_id,
+    email: user.email,
+    role: user.role,
+  };
+
+  return {
+    message: 'Login successful',
+    token: this.jwtService.sign(payload),
+    user: {
+      userId: user.user_id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    },
+  };
+}
+
+  async googleLogin(googleUser: any) {
+  let user = await this.userRepository.findOne({
+    where: {
+      email: googleUser.email,
+    },
+  });
+
+  if (!user) {
+    user = this.userRepository.create({
+      username: googleUser.email.split('@')[0],
+      email: googleUser.email,
+      first_name: googleUser.first_name || '',
+      last_name: googleUser.last_name || '',
+      password_hash: 'GOOGLE_AUTH_USER',
+      profile_image: googleUser.profile_image,
+      role: UserRole.USER,
+      is_active: true,
+    });
+
+    user = await this.userRepository.save(user);
+  }
+
+  const payload = {
+    sub: user.user_id,
+    email: user.email,
+    role: user.role,
+  };
+
+  return {
+    message: 'Google login successful',
+    token: this.jwtService.sign(payload),
+    user: {
+      user_id: user.user_id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    },
+  };
+}
+
   async getCurrentUser(userId: number) {
     const user = await this.userRepository.findOne({
       where: { user_id: userId },

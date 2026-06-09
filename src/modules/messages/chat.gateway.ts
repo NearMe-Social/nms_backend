@@ -15,7 +15,7 @@ import { UnauthorizedException } from '@nestjs/common';
 @WebSocketGateway({ cors: { origin: '*' }, namespace: '/chat' })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
-  server: Server;
+  server!: Server;
 
   constructor(
     private readonly messagesService: MessagesService,
@@ -129,7 +129,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const message = await this.messagesService.sendMessage(
         userId,
         data.conversationId,
-        { content: data.content },
+        { content: data.content, conversation_id: data.conversationId },
       );
       const participantIds =
         await this.messagesService.getConversationParticipantIds(
@@ -142,7 +142,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       return { success: true, message };
     } catch (error) {
-      return { success: false, error: error.message };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, error: errorMessage };
     }
   }
 }
