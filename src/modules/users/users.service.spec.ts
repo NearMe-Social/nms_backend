@@ -62,11 +62,21 @@ describe('UsersService', () => {
       radius: 100,
     });
 
-    expect(queryBuilder.setParameters).toHaveBeenCalledWith({
-      lat: 11.5564,
-      lng: 104.9282,
-      radius: 100,
-    });
+    expect(queryBuilder.setParameters).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lat: 11.5564,
+        lng: 104.9282,
+        radius: 100,
+        nearbyRole: 'USER',
+        locationFreshAfter: expect.any(Date),
+      }),
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'nearby_user.role = :nearbyRole',
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'nearby_user.location_updated_at >= :locationFreshAfter',
+    );
     expect(result).toEqual([
       {
         id: '2',
