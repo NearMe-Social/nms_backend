@@ -13,6 +13,7 @@ import {
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { NearbyUsersQueryDto } from './dto/nearby-users-query.dto';
+import { SearchUsersQueryDto } from './dto/search-users-query.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { Request } from 'express';
@@ -31,6 +32,15 @@ export class UsersController {
   @Get('me')
   async getMyProfile(@Req() req: RequestWithUser) {
     return this.usersService.findById(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('search')
+  async search(
+    @Query() query: SearchUsersQueryDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.usersService.search(query.q, req.user.userId);
   }
 
   @UseGuards(JwtAuthGuard)
