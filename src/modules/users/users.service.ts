@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
+import { User, UserRole } from './entities/user.entity';
 import { NearbyUsersQueryDto } from './dto/nearby-users-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
+
+const NEARBY_LOCATION_MAX_AGE_MS = 2 * 60 * 1000;
 
 export interface NearbyUserResponse {
   id: string;
@@ -73,6 +75,9 @@ export class UsersService {
     currentUserId?: number,
   ): Promise<NearbyUserResponse[]> {
     const radius = query.radius ?? 200;
+    const locationFreshAfter = new Date(
+      Date.now() - NEARBY_LOCATION_MAX_AGE_MS,
+    );
     const distanceSql = `
       6371000 * 2 * asin(
         sqrt(
@@ -92,10 +97,18 @@ export class UsersService {
       .addSelect('nearby_user.location_updated_at', 'location_updated_at')
       .addSelect(distanceSql, 'distance_m')
       .where('nearby_user.is_active = true')
+      .andWhere('nearby_user.role = :nearbyRole')
       .andWhere('nearby_user.current_latitude IS NOT NULL')
       .andWhere('nearby_user.current_longitude IS NOT NULL')
+      .andWhere('nearby_user.location_updated_at >= :locationFreshAfter')
       .andWhere(`${distanceSql} <= :radius`)
-      .setParameters({ lat: query.lat, lng: query.lng, radius })
+      .setParameters({
+        lat: query.lat,
+        lng: query.lng,
+        radius,
+        nearbyRole: UserRole.USER,
+        locationFreshAfter,
+      })
       .orderBy('distance_m', 'ASC');
 
     if (currentUserId) {
