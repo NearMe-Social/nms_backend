@@ -12,6 +12,7 @@ describe('UsersService', () => {
     andWhere: jest.Mock;
     setParameters: jest.Mock;
     orderBy: jest.Mock;
+    limit: jest.Mock;
     getRawMany: jest.Mock;
   };
 
@@ -23,6 +24,7 @@ describe('UsersService', () => {
       andWhere: jest.fn().mockReturnThis(),
       setParameters: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
       getRawMany: jest.fn(),
     };
 
@@ -62,11 +64,21 @@ describe('UsersService', () => {
       radius: 100,
     });
 
-    expect(queryBuilder.setParameters).toHaveBeenCalledWith({
-      lat: 11.5564,
-      lng: 104.9282,
-      radius: 100,
-    });
+    expect(queryBuilder.setParameters).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lat: 11.5564,
+        lng: 104.9282,
+        radius: 100,
+        nearbyRole: 'USER',
+        locationFreshAfter: expect.any(Date),
+      }),
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'nearby_user.role = :nearbyRole',
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'nearby_user.location_updated_at >= :locationFreshAfter',
+    );
     expect(result).toEqual([
       {
         id: '2',
@@ -79,5 +91,28 @@ describe('UsersService', () => {
     ]);
     expect(result[0]).not.toHaveProperty('current_latitude');
     expect(result[0]).not.toHaveProperty('current_longitude');
+  });
+
+  it('should search active non-admin users without exposing private fields', async () => {
+    queryBuilder.getRawMany.mockResolvedValue([
+      {
+        user_id: 2,
+        username: 'sokha',
+        first_name: 'Sokha',
+        last_name: 'Chan',
+        profile_image: null,
+      },
+    ]);
+
+    await expect(service.search('sok', 1)).resolves.toHaveLength(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'search_user.role = :role',
+      { role: 'USER' },
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'search_user.user_id != :currentUserId',
+      { currentUserId: 1 },
+    );
+    expect(queryBuilder.limit).toHaveBeenCalledWith(5);
   });
 });

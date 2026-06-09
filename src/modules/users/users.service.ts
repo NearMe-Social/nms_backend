@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
+import { User, UserRole } from './entities/user.entity';
 import { NearbyUsersQueryDto } from './dto/nearby-users-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
+
+const NEARBY_LOCATION_MAX_AGE_MS = 2 * 60 * 1000;
 
 export interface NearbyUserResponse {
   id: string;
@@ -13,6 +15,14 @@ export interface NearbyUserResponse {
   distance_label: string;
   profile_image?: string | null;
   location_updated_at: Date | null;
+}
+
+export interface UserSearchResponse {
+  user_id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+  profile_image: string | null;
 }
 
 interface NearbyUserRaw {
@@ -55,6 +65,35 @@ export class UsersService {
     return this.usersRepository.save(user);
   }
 
+  async search(
+    query: string,
+    currentUserId: number,
+  ): Promise<UserSearchResponse[]> {
+    const search = `%${this.escapeLikePattern(query)}%`;
+
+    return this.usersRepository
+      .createQueryBuilder('search_user')
+      .select('search_user.user_id', 'user_id')
+      .addSelect('search_user.username', 'username')
+      .addSelect('search_user.first_name', 'first_name')
+      .addSelect('search_user.last_name', 'last_name')
+      .addSelect('search_user.profile_image', 'profile_image')
+      .where('search_user.is_active = true')
+      .andWhere('search_user.role = :role', { role: UserRole.USER })
+      .andWhere('search_user.user_id != :currentUserId', { currentUserId })
+      .andWhere(
+        `(
+          search_user.username ILIKE :search ESCAPE '\\' OR
+          search_user.first_name ILIKE :search ESCAPE '\\' OR
+          search_user.last_name ILIKE :search ESCAPE '\\'
+        )`,
+        { search },
+      )
+      .orderBy('search_user.username', 'ASC')
+      .limit(5)
+      .getRawMany<UserSearchResponse>();
+  }
+
   async updateLocation(
     user_id: number,
     dto: UpdateLocationDto,
@@ -73,6 +112,9 @@ export class UsersService {
     currentUserId?: number,
   ): Promise<NearbyUserResponse[]> {
     const radius = query.radius ?? 200;
+    const locationFreshAfter = new Date(
+      Date.now() - NEARBY_LOCATION_MAX_AGE_MS,
+    );
     const distanceSql = `
       6371000 * 2 * asin(
         sqrt(
@@ -92,10 +134,18 @@ export class UsersService {
       .addSelect('nearby_user.location_updated_at', 'location_updated_at')
       .addSelect(distanceSql, 'distance_m')
       .where('nearby_user.is_active = true')
+      .andWhere('nearby_user.role = :nearbyRole')
       .andWhere('nearby_user.current_latitude IS NOT NULL')
       .andWhere('nearby_user.current_longitude IS NOT NULL')
+      .andWhere('nearby_user.location_updated_at >= :locationFreshAfter')
       .andWhere(`${distanceSql} <= :radius`)
-      .setParameters({ lat: query.lat, lng: query.lng, radius })
+      .setParameters({
+        lat: query.lat,
+        lng: query.lng,
+        radius,
+        nearbyRole: UserRole.USER,
+        locationFreshAfter,
+      })
       .orderBy('distance_m', 'ASC');
 
     if (currentUserId) {
@@ -130,5 +180,9 @@ export class UsersService {
 
   private distanceLabel(distance: number): string {
     return `within ${distance}m`;
+  }
+
+  private escapeLikePattern(value: string): string {
+    return value.replace(/[\\%_]/g, '\\$&');
   }
 }
