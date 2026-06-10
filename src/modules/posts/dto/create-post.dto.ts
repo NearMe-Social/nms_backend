@@ -37,8 +37,4 @@ export class CreatePostDto {
 
   @IsDateString()
   expires_at: string;
-
-  @Type(() => Number)
-  @IsInt()
-  user_id: number;
 }

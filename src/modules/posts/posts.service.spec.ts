@@ -2,9 +2,20 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Post } from './entities/post.entities';
 import { PostsService } from './posts.service';
+import { R2ImageStorageService } from '../users/r2-image-storage.service';
 
 describe('PostsService', () => {
   let service: PostsService;
+  let postsRepository: {
+    find: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
+  let imageStorage: {
+    uploadPostImage: jest.Mock;
+    deleteByPublicUrl: jest.Mock;
+  };
   let queryBuilder: {
     leftJoinAndSelect: jest.Mock;
     leftJoin: jest.Mock;
@@ -43,16 +54,27 @@ describe('PostsService', () => {
       getMany: jest.fn(),
       getRawMany: jest.fn(),
     };
+    postsRepository = {
+      find: jest.fn(),
+      create: jest.fn((value) => value),
+      save: jest.fn(),
+      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+    };
+    imageStorage = {
+      uploadPostImage: jest.fn(),
+      deleteByPublicUrl: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PostsService,
         {
           provide: getRepositoryToken(Post),
-          useValue: {
-            find: jest.fn(),
-            createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
-          },
+          useValue: postsRepository,
+        },
+        {
+          provide: R2ImageStorageService,
+          useValue: imageStorage,
         },
       ],
     }).compile();
@@ -70,6 +92,7 @@ describe('PostsService', () => {
         post_id: 1,
         title: 'Road repair',
         content: 'Elm Street is slow tonight',
+        image_url: null,
         visibility_radius: 200,
         status: 'ACTIVE',
         expires_at: new Date('2026-05-07T00:00:00Z'),
@@ -100,6 +123,7 @@ describe('PostsService', () => {
         post_id: 1,
         title: 'Road repair',
         content: 'Elm Street is slow tonight',
+        image_url: null,
         visibility_radius: 200,
         status: 'ACTIVE',
         expires_at: new Date('2026-05-07T00:00:00Z'),
@@ -151,5 +175,39 @@ describe('PostsService', () => {
       'search_post.expires_at > NOW()',
     );
     expect(queryBuilder.limit).toHaveBeenCalledWith(5);
+  });
+
+  it('should upload an optional image and save its URL with the post', async () => {
+    const file = {
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from('image'),
+    } as Express.Multer.File;
+    imageStorage.uploadPostImage.mockResolvedValue({
+      key: 'post-images/7/post.jpg',
+      url: 'https://images.example.com/post-images/7/post.jpg',
+    });
+    postsRepository.save.mockImplementation((value: Post) =>
+      Promise.resolve(value),
+    );
+
+    await expect(
+      service.create(
+        {
+          title: 'Local update',
+          content: 'A useful neighborhood update',
+          latitude: 11.5564,
+          longitude: 104.9282,
+          visibility_radius: 100,
+          expires_at: '2026-06-11T10:00:00.000Z',
+        },
+        7,
+        file,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        image_url: 'https://images.example.com/post-images/7/post.jpg',
+        user: { user_id: 7 },
+      }),
+    );
   });
 });

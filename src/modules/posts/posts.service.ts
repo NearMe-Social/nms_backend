@@ -10,11 +10,13 @@ import { NearbyPostsQueryDto } from './dto/nearby-posts-query.dto';
 import { PostsQueryDto } from './dto/posts-query.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { Post, PostStatus } from './entities/post.entities';
+import { R2ImageStorageService } from '../users/r2-image-storage.service';
 
 export interface NearbyPostResponse {
   post_id: number;
   title: string;
   content: string;
+  image_url: string | null;
   visibility_radius: number;
   status: PostStatus;
   expires_at: Date;
@@ -36,6 +38,7 @@ interface NearbyPostRaw {
   post_id: number | string;
   title: string;
   content: string;
+  image_url: string | null;
   visibility_radius: number | string;
   status: PostStatus;
   expires_at: Date;
@@ -54,22 +57,42 @@ export class PostsService {
   constructor(
     @InjectRepository(Post)
     private readonly postsRepository: Repository<Post>,
+    private readonly imageStorage: R2ImageStorageService,
   ) {}
 
-  async create(createPostDto: CreatePostDto): Promise<Post> {
+  async create(
+    createPostDto: CreatePostDto,
+    userId: number,
+    image?: Express.Multer.File,
+  ): Promise<Post> {
+    const uploadedImage = image
+      ? await this.imageStorage.uploadPostImage(userId, image)
+      : null;
+
     try {
       const post = this.postsRepository.create({
         title: createPostDto.title,
         content: createPostDto.content,
+        image_url: uploadedImage?.url ?? null,
         latitude: createPostDto.latitude,
         longitude: createPostDto.longitude,
         visibility_radius: createPostDto.visibility_radius ?? 200,
         expires_at: new Date(createPostDto.expires_at),
-        user: { user_id: createPostDto.user_id },
+        user: { user_id: userId },
       });
 
       return await this.postsRepository.save(post);
     } catch {
+      if (uploadedImage) {
+        try {
+          await this.imageStorage.deleteByPublicUrl(
+            uploadedImage.url,
+            'post-images',
+          );
+        } catch {
+          // Keep the post creation error if compensating cleanup also fails.
+        }
+      }
       throw new BadRequestException('Failed to create post');
     }
   }
@@ -153,6 +176,7 @@ export class PostsService {
       .select('post.post_id', 'post_id')
       .addSelect('post.title', 'title')
       .addSelect('post.content', 'content')
+      .addSelect('post.image_url', 'image_url')
       .addSelect('post.visibility_radius', 'visibility_radius')
       .addSelect('post.status', 'status')
       .addSelect('post.expires_at', 'expires_at')
@@ -189,6 +213,7 @@ export class PostsService {
         post_id: Number(row.post_id),
         title: row.title,
         content: row.content,
+        image_url: row.image_url,
         visibility_radius: Number(row.visibility_radius),
         status: row.status,
         expires_at: row.expires_at,
@@ -262,6 +287,14 @@ export class PostsService {
 
     try {
       await this.postsRepository.remove(post);
+      try {
+        await this.imageStorage.deleteByPublicUrl(
+          post.image_url,
+          'post-images',
+        );
+      } catch {
+        // The post is deleted even if storage cleanup must be retried later.
+      }
       return { message: 'Post deleted successfully' };
     } catch {
       throw new BadRequestException('Failed to delete post');

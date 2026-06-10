@@ -10,7 +10,11 @@ import {
   Patch,
   Post as HttpPost,
   Query,
+  Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
+  ParseFilePipeBuilder,
 } from '@nestjs/common';
 import { NearbyPostsQueryDto } from './dto/nearby-posts-query.dto';
 import { PostsQueryDto } from './dto/posts-query.dto';
@@ -20,15 +24,43 @@ import { SearchPostsQueryDto } from './dto/search-posts-query.dto';
 import { Post } from './entities/post.entities';
 import { NearbyPostResponse, PostsService } from './posts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Request } from 'express';
+
+interface RequestWithUser extends Request {
+  user: { userId: number };
+}
 
 @Controller('posts')
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
+  @UseGuards(JwtAuthGuard)
   @HttpPost()
   @HttpCode(HttpStatus.CREATED)
-  create(@Body() createPostDto: CreatePostDto): Promise<Post> {
-    return this.postsService.create(createPostDto);
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
+  )
+  create(
+    @Body() createPostDto: CreatePostDto,
+    @Req() req: RequestWithUser,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
+        .addFileTypeValidator({
+          fileType: /image\/(jpeg|png|webp)/,
+        })
+        .build({
+          fileIsRequired: false,
+        }),
+    )
+    image?: Express.Multer.File,
+  ): Promise<Post> {
+    return this.postsService.create(createPostDto, req.user.userId, image);
   }
 
   @Get()

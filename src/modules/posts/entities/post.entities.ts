@@ -26,6 +26,9 @@ export class Post {
   @Column({ type: 'text' })
   content!: string;
 
+  @Column({ type: 'varchar', nullable: true })
+  image_url!: string | null;
+
   @Column('decimal', { precision: 10, scale: 7 })
   latitude!: number;
 
