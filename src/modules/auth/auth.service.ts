@@ -321,6 +321,8 @@ export class AuthService {
     }
 
     user.email_verified = true;
+    user.profile_completed = false;
+    user.onboarding_completed = false;
     verification.consumed_at = new Date();
     await this.userRepository.save(user);
     await this.emailVerificationRepository.save(verification);
