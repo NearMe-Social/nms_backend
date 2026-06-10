@@ -22,6 +22,7 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { SearchPostsQueryDto } from './dto/search-posts-query.dto';
 import { VisiblePostQueryDto } from './dto/visible-post-query.dto';
+import { UserPostsQueryDto } from './dto/user-posts-query.dto';
 import { Post } from './entities/post.entities';
 import { NearbyPostResponse, PostsService } from './posts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -89,6 +90,22 @@ export class PostsController {
     @Query() query: NearbyPostsQueryDto,
   ): Promise<NearbyPostResponse[]> {
     return this.postsService.findNearby(query);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('user/:userId')
+  findByUser(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query() query: UserPostsQueryDto,
+    @Req() req: RequestWithUser,
+  ) {
+    return this.postsService.findByUserVisible(
+      userId,
+      req.user.userId,
+      query.lat,
+      query.lng,
+      query.limit,
+    );
   }
 
   @UseGuards(JwtAuthGuard)

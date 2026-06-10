@@ -1,7 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotificationsService } from './notifications.service';
-import { Notification, NotificationType } from './entities/notification.entities';
+import {
+  Notification,
+  NotificationType,
+} from './entities/notification.entities';
+import { Comment } from '../comments/entities/comment.entities';
+import { Message } from '../messages/entities/message.entity';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
@@ -11,6 +16,8 @@ describe('NotificationsService', () => {
     findAndCount: jest.Mock;
     findOne: jest.Mock;
   };
+  let commentRepo: { find: jest.Mock };
+  let messageRepo: { find: jest.Mock };
 
   beforeEach(async () => {
     repo = {
@@ -19,6 +26,8 @@ describe('NotificationsService', () => {
       findAndCount: jest.fn(),
       findOne: jest.fn(),
     };
+    commentRepo = { find: jest.fn().mockResolvedValue([]) };
+    messageRepo = { find: jest.fn().mockResolvedValue([]) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -26,6 +35,14 @@ describe('NotificationsService', () => {
         {
           provide: getRepositoryToken(Notification),
           useValue: repo,
+        },
+        {
+          provide: getRepositoryToken(Comment),
+          useValue: commentRepo,
+        },
+        {
+          provide: getRepositoryToken(Message),
+          useValue: messageRepo,
         },
       ],
     }).compile();
@@ -74,21 +91,68 @@ describe('NotificationsService', () => {
 
     repo.findAndCount.mockResolvedValue([rows, 1]);
 
-    await expect(service.getNotificationsByUser(1, { page: 0, size: 20 }))
-      .resolves.toEqual({
-        total: 1,
-        data: [
-          {
-            notification_id: 1,
-            type: NotificationType.COMMENT,
-            related_id: 20,
-            message: 'New comment on your post',
-            is_read: false,
-            created_at: createdAt,
-          },
-        ],
-      });
+    await expect(
+      service.getNotificationsByUser(1, { page: 0, size: 20 }),
+    ).resolves.toEqual({
+      total: 1,
+      data: [
+        {
+          notification_id: 1,
+          type: NotificationType.COMMENT,
+          related_id: 20,
+          message: 'New comment on your post',
+          is_read: false,
+          created_at: createdAt,
+          target_path: null,
+        },
+      ],
+    });
     expect(repo.findAndCount).toHaveBeenCalled();
+  });
+
+  it('resolves comment and message notification destinations', async () => {
+    const createdAt = new Date('2026-06-11T00:00:00Z');
+    repo.findAndCount.mockResolvedValue([
+      [
+        {
+          notification_id: 1,
+          type: NotificationType.COMMENT,
+          related_id: 20,
+          message: 'New comment on your post',
+          is_read: false,
+          created_at: createdAt,
+        },
+        {
+          notification_id: 2,
+          type: NotificationType.MESSAGE,
+          related_id: 30,
+          message: 'New message',
+          is_read: false,
+          created_at: createdAt,
+        },
+      ],
+      2,
+    ]);
+    commentRepo.find.mockResolvedValue([
+      { comment_id: 20, post: { post_id: 4 } },
+    ]);
+    messageRepo.find.mockResolvedValue([
+      { message_id: 30, conversation_id: 9 },
+    ]);
+
+    await expect(service.getNotificationsByUser(1)).resolves.toEqual({
+      total: 2,
+      data: [
+        expect.objectContaining({
+          notification_id: 1,
+          target_path: '/posts/4?commentId=20',
+        }),
+        expect.objectContaining({
+          notification_id: 2,
+          target_path: '/chat?conversationId=9&messageId=30',
+        }),
+      ],
+    });
   });
 
   it('marks notifications as read', async () => {

@@ -6,6 +6,7 @@ describe('PostsController', () => {
   let controller: PostsController;
   const postsService = {
     findNearby: jest.fn(),
+    findByUserVisible: jest.fn(),
     create: jest.fn(),
   };
 
@@ -52,10 +53,30 @@ describe('PostsController', () => {
       expires_at: '2026-06-11T10:00:00.000Z',
     };
     postsService.create.mockResolvedValue({ post_id: 1 });
+    const request = {
+      user: { userId: 7 },
+    } as Parameters<PostsController['create']>[1];
 
-    await expect(
-      controller.create(dto, { user: { userId: 7 } } as any),
-    ).resolves.toEqual({ post_id: 1 });
+    await expect(controller.create(dto, request)).resolves.toEqual({
+      post_id: 1,
+    });
     expect(postsService.create).toHaveBeenCalledWith(dto, 7, undefined);
+  });
+
+  it('should delegate privacy-aware user post queries', async () => {
+    const query = { lat: 11.5564, lng: 104.9282, limit: 3 };
+    postsService.findByUserVisible.mockResolvedValue([]);
+    const request = {
+      user: { userId: 7 },
+    } as Parameters<PostsController['findByUser']>[2];
+
+    await expect(controller.findByUser(8, query, request)).resolves.toEqual([]);
+    expect(postsService.findByUserVisible).toHaveBeenCalledWith(
+      8,
+      7,
+      11.5564,
+      104.9282,
+      3,
+    );
   });
 });

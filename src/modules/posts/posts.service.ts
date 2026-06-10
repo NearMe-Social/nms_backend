@@ -148,6 +148,44 @@ export class PostsService {
     return posts.map((post) => this.toPublicPost(post));
   }
 
+  async findByUserVisible(
+    targetUserId: number,
+    viewerUserId: number,
+    lat?: number,
+    lng?: number,
+    limit = 3,
+  ): Promise<PublicPost[]> {
+    const queryBuilder = this.postsRepository
+      .createQueryBuilder('profile_post')
+      .leftJoinAndSelect('profile_post.user', 'user')
+      .leftJoinAndSelect('profile_post.comments', 'comments')
+      .leftJoinAndSelect('profile_post.reactions', 'reactions')
+      .where('user.user_id = :targetUserId', { targetUserId })
+      .andWhere('profile_post.status != :removed', {
+        removed: PostStatus.REMOVED,
+      })
+      .orderBy('profile_post.created_at', 'DESC')
+      .take(limit);
+
+    if (targetUserId !== viewerUserId) {
+      if (lat === undefined || lng === undefined) return [];
+
+      const distanceSql = this.distanceSql('profile_post');
+      queryBuilder
+        .andWhere('profile_post.status = :status', {
+          status: PostStatus.ACTIVE,
+        })
+        .andWhere('profile_post.expires_at > NOW()')
+        .andWhere('profile_post.latitude IS NOT NULL')
+        .andWhere('profile_post.longitude IS NOT NULL')
+        .andWhere(`${distanceSql} <= profile_post.visibility_radius`)
+        .setParameters({ lat, lng });
+    }
+
+    const posts = await queryBuilder.getMany();
+    return posts.map((post) => this.toPublicPost(post));
+  }
+
   async search(query: string, lat: number, lng: number): Promise<PublicPost[]> {
     const search = `%${this.escapeLikePattern(query)}%`;
     const distanceSql = this.distanceSql('search_post');
