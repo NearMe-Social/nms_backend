@@ -200,6 +200,8 @@ describe('AuthService', () => {
     const result = await service.verifyOtp(user.email, otp);
 
     expect(user.email_verified).toBe(true);
+    expect(user.profile_completed).toBe(false);
+    expect(user.onboarding_completed).toBe(false);
     expect(verification.consumed_at).toBeInstanceOf(Date);
     expect(result.token).toBe('signed-token');
     expect(result.user.email_verified).toBe(true);
