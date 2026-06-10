@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -33,6 +34,8 @@ export interface NearbyPostResponse {
   comments_count: number;
   reactions_count: number;
 }
+
+type PublicPost = Omit<Post, 'latitude' | 'longitude'>;
 
 interface NearbyPostRaw {
   post_id: number | string;
@@ -131,16 +134,34 @@ export class PostsService {
     });
   }
 
-  search(query: string): Promise<Post[]> {
-    const search = `%${this.escapeLikePattern(query)}%`;
+  async findMine(userId: number): Promise<PublicPost[]> {
+    const posts = await this.postsRepository
+      .createQueryBuilder('post')
+      .leftJoinAndSelect('post.user', 'user')
+      .leftJoinAndSelect('post.comments', 'comments')
+      .leftJoinAndSelect('post.reactions', 'reactions')
+      .where('user.user_id = :userId', { userId })
+      .andWhere('post.status != :removed', { removed: PostStatus.REMOVED })
+      .orderBy('post.created_at', 'DESC')
+      .getMany();
 
-    return this.postsRepository
+    return posts.map((post) => this.toPublicPost(post));
+  }
+
+  async search(query: string, lat: number, lng: number): Promise<PublicPost[]> {
+    const search = `%${this.escapeLikePattern(query)}%`;
+    const distanceSql = this.distanceSql('search_post');
+
+    const posts = await this.postsRepository
       .createQueryBuilder('search_post')
       .leftJoinAndSelect('search_post.user', 'user')
       .leftJoinAndSelect('search_post.comments', 'comments')
       .leftJoinAndSelect('search_post.reactions', 'reactions')
       .where('search_post.status = :status', { status: PostStatus.ACTIVE })
       .andWhere('search_post.expires_at > NOW()')
+      .andWhere('search_post.latitude IS NOT NULL')
+      .andWhere('search_post.longitude IS NOT NULL')
+      .andWhere(`${distanceSql} <= search_post.visibility_radius`)
       .andWhere(
         `(
           search_post.title ILIKE :search ESCAPE '\\' OR
@@ -149,24 +170,18 @@ export class PostsService {
         )`,
         { search },
       )
+      .setParameters({ lat, lng })
       .orderBy('search_post.created_at', 'DESC')
       .limit(5)
       .getMany();
+
+    return posts.map((post) => this.toPublicPost(post));
   }
 
   async findNearby(query: NearbyPostsQueryDto): Promise<NearbyPostResponse[]> {
     const radius = query.radius ?? 200;
 
-    const distanceSql = `
-      6371000 * 2 * asin(
-        sqrt(
-          power(sin(radians((post.latitude::float - :lat) / 2)), 2) +
-          cos(radians(:lat)) *
-          cos(radians(post.latitude::float)) *
-          power(sin(radians((post.longitude::float - :lng) / 2)), 2)
-        )
-      )
-    `;
+    const distanceSql = this.distanceSql('post');
 
     const queryBuilder = this.postsRepository
       .createQueryBuilder('post')
@@ -198,7 +213,16 @@ export class PostsService {
       .andHaving(`${distanceSql} <= post.visibility_radius`)
       .setParameters({ lat: query.lat, lng: query.lng, radius });
 
-    queryBuilder.orderBy('post.created_at', 'DESC');
+    if (query.sort === 'active') {
+      queryBuilder
+        .orderBy(
+          'COUNT(DISTINCT comment.comment_id) + COUNT(DISTINCT reaction.reaction_id)',
+          'DESC',
+        )
+        .addOrderBy('post.created_at', 'DESC');
+    } else {
+      queryBuilder.orderBy('post.created_at', 'DESC');
+    }
 
     const rows = await queryBuilder.getRawMany<NearbyPostRaw>();
 
@@ -248,8 +272,47 @@ export class PostsService {
     return post;
   }
 
-  async update(postId: number, updatePostDto: UpdatePostDto): Promise<Post> {
+  async findVisibleOne(
+    postId: number,
+    userId: number,
+    lat?: number,
+    lng?: number,
+  ): Promise<PublicPost> {
     const post = await this.findOne(postId);
+    const owner = post.user as { user_id?: number } | null;
+    const ownerId = Number(owner?.user_id);
+
+    if (ownerId !== userId) {
+      if (lat === undefined || lng === undefined) {
+        throw new NotFoundException('Post is not available at your location');
+      }
+
+      const distance = this.distanceMeters(
+        lat,
+        lng,
+        Number(post.latitude),
+        Number(post.longitude),
+      );
+      const isVisible =
+        post.status === PostStatus.ACTIVE &&
+        post.expires_at.getTime() > Date.now() &&
+        distance <= post.visibility_radius;
+
+      if (!isVisible) {
+        throw new NotFoundException('Post is not available at your location');
+      }
+    }
+
+    return this.toPublicPost(post);
+  }
+
+  async update(
+    postId: number,
+    updatePostDto: UpdatePostDto,
+    userId: number,
+  ): Promise<Post> {
+    const post = await this.findOne(postId);
+    this.assertOwner(post, userId);
 
     if (updatePostDto.title !== undefined) {
       post.title = updatePostDto.title;
@@ -282,8 +345,9 @@ export class PostsService {
     }
   }
 
-  async remove(postId: number): Promise<{ message: string }> {
+  async remove(postId: number, userId: number): Promise<{ message: string }> {
     const post = await this.findOne(postId);
+    this.assertOwner(post, userId);
 
     try {
       await this.postsRepository.remove(post);
@@ -307,6 +371,51 @@ export class PostsService {
     }
 
     return Math.ceil(distance / 50) * 50;
+  }
+
+  private assertOwner(post: Post, userId: number): void {
+    const owner = post.user as { user_id?: number } | null;
+    if (Number(owner?.user_id) !== userId) {
+      throw new ForbiddenException('You can only manage your own posts');
+    }
+  }
+
+  private distanceSql(alias: string): string {
+    return `
+      6371000 * 2 * asin(
+        sqrt(
+          power(sin(radians((${alias}.latitude::float - :lat) / 2)), 2) +
+          cos(radians(:lat)) *
+          cos(radians(${alias}.latitude::float)) *
+          power(sin(radians((${alias}.longitude::float - :lng) / 2)), 2)
+        )
+      )
+    `;
+  }
+
+  private distanceMeters(
+    viewerLat: number,
+    viewerLng: number,
+    postLat: number,
+    postLng: number,
+  ): number {
+    const toRadians = (value: number) => (value * Math.PI) / 180;
+    const latDifference = toRadians(postLat - viewerLat);
+    const lngDifference = toRadians(postLng - viewerLng);
+    const startLat = toRadians(viewerLat);
+    const endLat = toRadians(postLat);
+    const haversine =
+      Math.sin(latDifference / 2) ** 2 +
+      Math.cos(startLat) * Math.cos(endLat) * Math.sin(lngDifference / 2) ** 2;
+
+    return 6371000 * 2 * Math.asin(Math.sqrt(haversine));
+  }
+
+  private toPublicPost(post: Post): PublicPost {
+    const publicPost = { ...post } as Partial<Post>;
+    delete publicPost.latitude;
+    delete publicPost.longitude;
+    return publicPost as PublicPost;
   }
 
   private distanceLabel(distance: number): string {
