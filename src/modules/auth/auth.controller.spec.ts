@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -12,6 +13,12 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: {},
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            getOrThrow: jest.fn(),
+          },
         },
       ],
     }).compile();

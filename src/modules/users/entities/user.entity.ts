@@ -1,16 +1,9 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  OneToMany,
-
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany } from 'typeorm';
 import { Exclude } from 'class-transformer';
 import { UserBlock } from '../../blocks/entities/user-block.entity';
 import { Report } from '../../reports/entities/report.entities';
 import { Notification } from '../../notifications/entities/notification.entities';
 import { ConversationParticipant } from '../../conversations/entities/conversation-participant.entity';
-
 
 export enum UserRole {
   USER = 'USER',
@@ -47,7 +40,7 @@ export class User {
   @Exclude()
   @Column({
     type: 'varchar',
-    nullable: true
+    nullable: true,
   })
   password_hash!: string | null;
 
@@ -67,7 +60,7 @@ export class User {
   })
   gender!: Gender | null;
 
-   @Column({
+  @Column({
     type: 'enum',
     enum: UserRole,
     default: UserRole.USER,
@@ -92,6 +85,15 @@ export class User {
   @Column({ default: true })
   is_active!: boolean;
 
+  @Column({ default: false })
+  email_verified!: boolean;
+
+  @Column({ default: false })
+  profile_completed!: boolean;
+
+  @Column({ default: false })
+  onboarding_completed!: boolean;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   created_at!: Date;
 
@@ -113,7 +115,9 @@ export class User {
   @OneToMany(() => Notification, (notification) => notification.user)
   notifications!: Notification[];
 
-  @OneToMany(() => ConversationParticipant, (conversationparticipant) => conversationparticipant.user)
+  @OneToMany(
+    () => ConversationParticipant,
+    (conversationparticipant) => conversationparticipant.user,
+  )
   conversationParticipants!: ConversationParticipant[];
-
 }
