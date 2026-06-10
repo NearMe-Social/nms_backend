@@ -29,6 +29,9 @@ export class User {
   @PrimaryGeneratedColumn()
   user_id!: number;
 
+  @Column({ type: 'varchar', nullable: true, unique: true })
+  google_id!: string | null;
+
   @Column({ unique: true })
   username!: string;
 

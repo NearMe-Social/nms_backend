@@ -1,15 +1,19 @@
 import { Controller, UseGuards, Body, Post, Get, Request, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { SendOtpDto, VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { Get, Request } from '@nestjs/common';
 import {GoogleAuthGuard} from './guards/google.auth.guard';
+import { ConfigService } from '@nestjs/config';
+import { GoogleUser } from './strategies/google.strategy';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,) {}
 
   @Post('register')
   register(@Body() registerDto: RegisterDto) {
@@ -34,16 +38,15 @@ export class AuthController {
   @UseGuards(GoogleAuthGuard)
   @Get('google/callback')
 async googleAuthCallback(
-  @Request() req: any,
+  @Request() req: { user: GoogleUser },
   @Res() res: any,
 ) {
   const result = await this.authService.googleLogin(
     req.user,
   );
+  const frontendUrl = this.configService.getOrThrow<string>('FRONTEND_URL');
 
-  return res.redirect(
-    `http://localhost:5173/auth/google/callback?token=${result.token}`,
-  );
+  return res.redirect(`${frontendUrl}/auth/google/callback?token=${encodeURIComponent(result.token)}`);
 }
 
   // ── NEW OTP endpoints ──

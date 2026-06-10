@@ -1,46 +1,44 @@
-import { Injectable } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, Profile } from 'passport-google-oauth20';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PassportStrategy } from '@nestjs/passport';
+import { Profile, Strategy } from 'passport-google-oauth20';
 
-@Injectable()
-export class GoogleStrategy extends PassportStrategy(
-  Strategy,
-  'google',
-) {
-  
-    constructor(
-  private readonly configService: ConfigService,
-) {
-
-  console.log(
-    'GOOGLE_CLIENT_ID:',
-    configService.get('GOOGLE_CLIENT_ID'),
-  );
-
-  console.log(
-    'GOOGLE_CALLBACK_URL:',
-    configService.get('GOOGLE_CALLBACK_URL'),
-  );
-
-  super({
-    clientID: configService.get<string>('GOOGLE_CLIENT_ID')!,
-    clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET')!,
-    callbackURL: configService.get<string>('GOOGLE_CALLBACK_URL')!,
-    scope: ['email', 'profile'],
-  });
+export interface GoogleUser {
+  googleId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  profileImage: string | null;
 }
 
-  async validate(
+@Injectable()
+export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+  constructor(config: ConfigService) {
+    super({
+      clientID: config.getOrThrow<string>('GOOGLE_CLIENT_ID'),
+      clientSecret: config.getOrThrow<string>('GOOGLE_CLIENT_SECRET'),
+      callbackURL: config.getOrThrow<string>('GOOGLE_CALLBACK_URL'),
+      scope: ['email', 'profile'],
+    });
+  }
+
+  validate(
     accessToken: string,
     refreshToken: string,
     profile: Profile,
-  ) {
+  ): GoogleUser {
+    const email = profile.emails?.[0]?.value;
+
+    if (!email) {
+      throw new UnauthorizedException('Google account has no email');
+    }
+
     return {
-      email: profile.emails?.[0]?.value,
-      first_name: profile.name?.givenName,
-      last_name: profile.name?.familyName,
-      profile_image: profile.photos?.[0]?.value,
+      googleId: profile.id,
+      email: email.toLowerCase(),
+      firstName: profile.name?.givenName ?? '',
+      lastName: profile.name?.familyName ?? '',
+      profileImage: profile.photos?.[0]?.value ?? null,
     };
   }
 }
