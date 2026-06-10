@@ -9,6 +9,9 @@ import {
   UseInterceptors,
   Patch,
   Query,
+  Post,
+  UploadedFile,
+  ParseFilePipeBuilder,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,6 +21,7 @@ import { UpdateLocationDto } from './dto/update-location.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { Request } from 'express';
+import { FileInterceptor } from '@nestjs/platform-express';
 //import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
 interface RequestWithUser extends Request {
@@ -65,6 +69,32 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('me/profile-image')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
+  )
+  async uploadProfileImage(
+    @Req() req: RequestWithUser,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
+        .addFileTypeValidator({
+          fileType: /image\/(jpeg|png|webp)/,
+        })
+        .build({
+          fileIsRequired: true,
+        }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return this.usersService.updateProfileImage(req.user.userId, file);
   }
 
   @UseGuards(JwtAuthGuard)
