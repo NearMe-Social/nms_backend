@@ -10,6 +10,7 @@ import { NearbyUsersQueryDto } from './dto/nearby-users-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { ProfileImageStorageService } from './profile-image-storage.service';
 
 const NEARBY_LOCATION_MAX_AGE_MS = 2 * 60 * 1000;
 
@@ -43,6 +44,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    private readonly profileImageStorage: ProfileImageStorageService,
   ) {}
 
   async findById(user_id: number): Promise<User> {
@@ -68,6 +70,38 @@ export class UsersService {
     if (dto.profile_image !== undefined) user.profile_image = dto.profile_image;
 
     return this.usersRepository.save(user);
+  }
+
+  async updateProfileImage(
+    user_id: number,
+    file: Express.Multer.File,
+  ): Promise<{ url: string; user: User }> {
+    const user = await this.findById(user_id);
+    const previousImage = user.profile_image;
+    const uploaded = await this.profileImageStorage.upload(user_id, file);
+
+    try {
+      user.profile_image = uploaded.url;
+      const savedUser = await this.usersRepository.save(user);
+
+      try {
+        await this.profileImageStorage.deleteByPublicUrl(previousImage);
+      } catch {
+        // Replacing the current image should still succeed if old-object cleanup fails.
+      }
+
+      return {
+        url: uploaded.url,
+        user: savedUser,
+      };
+    } catch (error) {
+      try {
+        await this.profileImageStorage.deleteByPublicUrl(uploaded.url);
+      } catch {
+        // Preserve the database error if compensating storage cleanup also fails.
+      }
+      throw error;
+    }
   }
 
   async completeProfile(
