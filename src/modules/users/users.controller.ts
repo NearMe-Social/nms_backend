@@ -16,6 +16,7 @@ import { NearbyUsersQueryDto } from './dto/nearby-users-query.dto';
 import { SearchUsersQueryDto } from './dto/search-users-query.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { Request } from 'express';
 //import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
@@ -64,6 +65,21 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/complete-profile')
+  async completeProfile(
+    @Req() req: RequestWithUser,
+    @Body() dto: CompleteProfileDto,
+  ) {
+    return this.usersService.completeProfile(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/complete-onboarding')
+  async completeOnboarding(@Req() req: RequestWithUser) {
+    return this.usersService.completeOnboarding(req.user.userId);
   }
 
   @UseGuards(JwtAuthGuard)

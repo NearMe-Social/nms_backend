@@ -1,10 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserRole } from './entities/user.entity';
 import { NearbyUsersQueryDto } from './dto/nearby-users-query.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
+import { CompleteProfileDto } from './dto/complete-profile.dto';
 
 const NEARBY_LOCATION_MAX_AGE_MS = 2 * 60 * 1000;
 
@@ -62,6 +67,35 @@ export class UsersService {
     if (dto.bio !== undefined) user.bio = dto.bio;
     if (dto.profile_image !== undefined) user.profile_image = dto.profile_image;
 
+    return this.usersRepository.save(user);
+  }
+
+  async completeProfile(
+    user_id: number,
+    dto: CompleteProfileDto,
+  ): Promise<User> {
+    const user = await this.findById(user_id);
+
+    if (dto.username && dto.username !== user.username) {
+      const existing = await this.usersRepository.findOne({
+        where: { username: dto.username },
+      });
+
+      if (existing) {
+        throw new ConflictException('Username is already taken');
+      }
+
+      user.username = dto.username;
+    }
+
+    user.profile_completed = true;
+    return this.usersRepository.save(user);
+  }
+
+  async completeOnboarding(user_id: number): Promise<User> {
+    const user = await this.findById(user_id);
+    user.profile_completed = true;
+    user.onboarding_completed = true;
     return this.usersRepository.save(user);
   }
 

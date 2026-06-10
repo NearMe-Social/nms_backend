@@ -6,27 +6,41 @@ import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
 import type { GoogleUser } from './strategies/google.strategy';
+import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
+import { EmailVerification } from './entities/email-verification.entity';
+import { EmailService } from './email.service';
+
+const OTP_EXPIRY_MS = 10 * 60 * 1000;
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
 
 @Injectable()
 export class AuthService {
-  // Store OTPs in memory: { email: { otp, expiresAt } }
-  private otpStore = new Map<string, { otp: string; expiresAt: Date }>();
-
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+
+    @InjectRepository(EmailVerification)
+    private readonly emailVerificationRepository: Repository<EmailVerification>,
+
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ── existing register ──
   async register(registerDto: RegisterDto) {
+    const email = registerDto.email.trim().toLowerCase();
     const existing = await this.userRepository.findOne({
-      where: [{ email: registerDto.email }, { username: registerDto.username }],
+      where: [{ email }, { username: registerDto.username }],
     });
     if (existing) {
       throw new BadRequestException('Email or username already exists');
@@ -34,220 +48,278 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(registerDto.password, 10);
     const user = this.userRepository.create({
       username: registerDto.username,
-      email: registerDto.email,
+      email,
       first_name: registerDto.first_name,
       last_name: registerDto.last_name,
       password_hash: passwordHash,
-      birthday: registerDto.birthday ? new Date(registerDto.birthday) : (null as any),
-      gender: registerDto.gender ? (registerDto.gender as Gender) : (null as any),
+      birthday: registerDto.birthday
+        ? new Date(registerDto.birthday)
+        : (null as any),
+      gender: registerDto.gender
+        ? (registerDto.gender as Gender)
+        : (null as any),
       role: UserRole.USER,
       is_active: true,
+      email_verified: false,
     });
     const savedUser = await this.userRepository.save(user);
-    const payload = {
-      sub: savedUser.user_id,
-      email: savedUser.email,
-      role: savedUser.role,
-    };
+
     return {
-      message: 'Registration successful',
-      token: this.jwtService.sign(payload),
-      user: {
-        user_id: savedUser.user_id,
-        username: savedUser.username,
-        email: savedUser.email,
-        role: savedUser.role,
-      },
+      message: 'Registration successful. Verify your email to continue.',
+      email: savedUser.email,
     };
   }
 
   // ── existing login ──
   async login(loginDto: LoginDto) {
-  const user = await this.userRepository.findOne({
-    where: { email: loginDto.email },
-  });
+    const email = loginDto.email.trim().toLowerCase();
+    const user = await this.userRepository.findOne({
+      where: { email },
+    });
 
-  if (!user) {
-    throw new UnauthorizedException('Invalid credentials');
-  }
-
-  
-  if (!user.password_hash) {
-    throw new UnauthorizedException(
-      'This account uses Google login. Please sign in with Google.',
-    );
-  }
-
-  const passwordMatched = await bcrypt.compare(
-    loginDto.password,
-    user.password_hash,
-  );
-
-  if (!passwordMatched) {
-    throw new UnauthorizedException('Invalid password');
-  }
-
-  if (!user.is_active) {
-    throw new UnauthorizedException('Account is inactive');
-  }
-
-  const payload = {
-    sub: user.user_id,
-    email: user.email,
-    role: user.role,
-  };
-
-  return {
-    message: 'Login successful',
-    token: this.jwtService.sign(payload),
-    user: {
-      userId: user.user_id,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-    },
-  };
-}
-
-
-async googleLogin(googleUser: GoogleUser) {
-  let user = await this.userRepository.findOne({
-    where: [
-      { google_id: googleUser.googleId },
-      { email: googleUser.email },
-    ],
-  });
-
-  if (!user) {
-    const usernameBase = googleUser.email
-      .split('@')[0]
-      .replace(/[^a-zA-Z0-9_]/g, '');
-
-    let username = usernameBase;
-    let suffix = 1;
-
-    while (await this.userRepository.exists({ where: { username } })) {
-      username = `${usernameBase}${suffix++}`;
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
     }
 
-    user = this.userRepository.create({
-      google_id: googleUser.googleId,
-      username,
-      email: googleUser.email,
-      first_name: googleUser.firstName,
-      last_name: googleUser.lastName,
-      profile_image: googleUser.profileImage,
-      password_hash: null,
-      role: UserRole.USER,
-      is_active: true,
-    });
-  } else if (!user.google_id) {
-    user.google_id = googleUser.googleId;
-  }
+    if (!user.password_hash) {
+      throw new UnauthorizedException(
+        'This account uses Google login. Please sign in with Google.',
+      );
+    }
 
-  if (!user.is_active) {
-    throw new UnauthorizedException('Account is inactive');
-  }
+    const passwordMatched = await bcrypt.compare(
+      loginDto.password,
+      user.password_hash,
+    );
 
-  user = await this.userRepository.save(user);
+    if (!passwordMatched) {
+      throw new UnauthorizedException('Invalid password');
+    }
 
-  const token = this.jwtService.sign({
-    sub: user.user_id,
-    email: user.email,
-    role: user.role,
-  });
+    if (!user.is_active) {
+      throw new UnauthorizedException('Account is inactive');
+    }
 
-  return {
-    token,
-    user: {
-      userId: user.user_id,
-      username: user.username,
+    if (!user.email_verified) {
+      throw new UnauthorizedException(
+        'Please verify your email before signing in.',
+      );
+    }
+
+    const payload = {
+      sub: user.user_id,
       email: user.email,
       role: user.role,
-    },
-  };
-}
+    };
+
+    return {
+      message: 'Login successful',
+      token: this.jwtService.sign(payload),
+      user: {
+        userId: user.user_id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        email_verified: user.email_verified,
+        profile_completed: user.profile_completed,
+        onboarding_completed: user.onboarding_completed,
+        profile_image: user.profile_image,
+      },
+    };
+  }
+
+  async googleLogin(googleUser: GoogleUser) {
+    let user = await this.userRepository.findOne({
+      where: [{ google_id: googleUser.googleId }, { email: googleUser.email }],
+    });
+
+    if (!user) {
+      const usernameBase = googleUser.email
+        .split('@')[0]
+        .replace(/[^a-zA-Z0-9_]/g, '');
+
+      let username = usernameBase;
+      let suffix = 1;
+
+      while (await this.userRepository.exists({ where: { username } })) {
+        username = `${usernameBase}${suffix++}`;
+      }
+
+      user = this.userRepository.create({
+        google_id: googleUser.googleId,
+        username,
+        email: googleUser.email,
+        first_name: googleUser.firstName,
+        last_name: googleUser.lastName,
+        profile_image: googleUser.profileImage,
+        password_hash: null,
+        role: UserRole.USER,
+        is_active: true,
+        email_verified: true,
+      });
+    } else if (!user.google_id) {
+      user.google_id = googleUser.googleId;
+    }
+
+    user.email_verified = true;
+
+    if (!user.is_active) {
+      throw new UnauthorizedException('Account is inactive');
+    }
+
+    user = await this.userRepository.save(user);
+
+    const token = this.jwtService.sign({
+      sub: user.user_id,
+      email: user.email,
+      role: user.role,
+    });
+
+    return {
+      token,
+      user: {
+        userId: user.user_id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        email_verified: user.email_verified,
+        profile_completed: user.profile_completed,
+        onboarding_completed: user.onboarding_completed,
+        profile_image: user.profile_image,
+      },
+    };
+  }
 
   async getCurrentUser(userId: number) {
     const user = await this.userRepository.findOne({
       where: { user_id: userId },
-      select: ['user_id', 'username', 'email', 'role', 'is_active'],
+      select: [
+        'user_id',
+        'username',
+        'email',
+        'role',
+        'is_active',
+        'email_verified',
+        'profile_completed',
+        'onboarding_completed',
+        'profile_image',
+      ],
     });
     if (!user) throw new UnauthorizedException('User not found');
     return user;
   }
 
-  // ── NEW: send OTP ──
   async sendOtp(email: string) {
-    const user = await this.userRepository.findOne({ where: { email } });
-    if (!user) throw new BadRequestException('Email not found');
+    const normalizedEmail = email.trim().toLowerCase();
+    const genericResponse = {
+      message: 'If the account requires verification, a code has been sent.',
+    };
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
+    });
 
-    // generate 6 digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    // store OTP
-    this.otpStore.set(email, { otp, expiresAt });
-
-    try {
-      // send email
-      const transporter = nodemailer.createTransport({
-        host: this.configService.get<string>('MAIL_HOST'),
-        port: this.configService.get<number>('MAIL_PORT'),
-        secure: this.configService.get<number>('MAIL_PORT') === 465, // true for port 465, false for 587
-        auth: {
-          user: this.configService.get<string>('MAIL_USER'),
-          pass: this.configService.get<string>('MAIL_PASS'),
-        },
-      });
-
-      await transporter.sendMail({
-        from: this.configService.get<string>('MAIL_FROM'),
-        to: email,
-        subject: 'Your NearMe Social OTP Code',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 400px; margin: 0 auto;">
-            <h2 style="color: #0c9081;">NearMe Social</h2>
-            <p>Your verification code is:</p>
-            <h1 style="letter-spacing: 8px; color: #1a1a2e; font-size: 36px;">${otp}</h1>
-            <p style="color: #666;">This code expires in <strong>10 minutes</strong>.</p>
-            <p style="color: #999; font-size: 12px;">If you didn't request this, please ignore this email.</p>
-          </div>
-        `,
-      });
-
-      console.log(`[OTP] Email sent successfully to ${email}`);
-      return { message: 'OTP sent successfully' };
-    } catch (error: any) {
-      console.error(`[OTP ERROR] Failed to send OTP to ${email}:`, error.message);
-      this.otpStore.delete(email); // Clean up on failure
-      throw new BadRequestException(`Failed to send OTP: ${error.message}`);
+    if (!user || user.email_verified) {
+      return genericResponse;
     }
+
+    const now = new Date();
+    let verification = await this.emailVerificationRepository.findOne({
+      where: { email: normalizedEmail },
+    });
+
+    if (
+      verification &&
+      now.getTime() - verification.last_sent_at.getTime() <
+        OTP_RESEND_COOLDOWN_MS
+    ) {
+      const retryAfterSeconds = Math.ceil(
+        (OTP_RESEND_COOLDOWN_MS -
+          (now.getTime() - verification.last_sent_at.getTime())) /
+          1000,
+      );
+
+      throw new HttpException(
+        {
+          message: `Please wait ${retryAfterSeconds} seconds before requesting another code.`,
+          retryAfterSeconds,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const otp = randomInt(100000, 1000000).toString();
+    const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MS);
+
+    await this.emailService.sendOtp(normalizedEmail, otp);
+
+    const values = {
+      email: normalizedEmail,
+      code_hash: this.hashOtp(normalizedEmail, otp),
+      attempt_count: 0,
+      expires_at: expiresAt,
+      last_sent_at: now,
+      consumed_at: null,
+    };
+
+    if (verification) {
+      Object.assign(verification, values);
+    } else {
+      verification = this.emailVerificationRepository.create(values);
+    }
+
+    await this.emailVerificationRepository.save(verification);
+    return genericResponse;
   }
 
-  // ── NEW: verify OTP ──
   async verifyOtp(email: string, otp: string) {
-    const stored = this.otpStore.get(email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const verification = await this.emailVerificationRepository.findOne({
+      where: { email: normalizedEmail },
+    });
 
-    if (!stored) {
+    if (!verification || verification.consumed_at) {
       throw new BadRequestException('No OTP found. Please request a new one.');
     }
 
-    if (new Date() > stored.expiresAt) {
-      this.otpStore.delete(email);
-      throw new BadRequestException('OTP has expired. Please request a new one.');
+    if (new Date() > verification.expires_at) {
+      throw new BadRequestException(
+        'OTP has expired. Please request a new one.',
+      );
     }
 
-    if (stored.otp !== otp) {
+    if (verification.attempt_count >= OTP_MAX_ATTEMPTS) {
+      throw new HttpException(
+        'Too many attempts. Request a new code.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    if (!this.otpMatches(normalizedEmail, otp, verification.code_hash)) {
+      verification.attempt_count += 1;
+      await this.emailVerificationRepository.save(verification);
+
+      if (verification.attempt_count >= OTP_MAX_ATTEMPTS) {
+        throw new HttpException(
+          'Too many attempts. Request a new code.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+
       throw new BadRequestException('Invalid OTP. Please try again.');
     }
 
-    // OTP is correct — delete it
-    this.otpStore.delete(email);
-
-    // get user and return token
-    const user = await this.userRepository.findOne({ where: { email } });
+    const user = await this.userRepository.findOne({
+      where: { email: normalizedEmail },
+    });
     if (!user) throw new BadRequestException('User not found');
+    if (!user.is_active) {
+      throw new UnauthorizedException('Account is inactive');
+    }
+
+    user.email_verified = true;
+    verification.consumed_at = new Date();
+    await this.userRepository.save(user);
+    await this.emailVerificationRepository.save(verification);
 
     const payload = {
       sub: user.user_id,
@@ -263,7 +335,31 @@ async googleLogin(googleUser: GoogleUser) {
         username: user.username,
         email: user.email,
         role: user.role,
+        email_verified: user.email_verified,
+        profile_completed: user.profile_completed,
+        onboarding_completed: user.onboarding_completed,
+        profile_image: user.profile_image,
       },
     };
+  }
+
+  private hashOtp(email: string, otp: string): string {
+    const secret = this.configService.getOrThrow<string>('JWT_SECRET');
+    return createHmac('sha256', secret)
+      .update(`email-verification:${email}:${otp}`)
+      .digest('hex');
+  }
+
+  private otpMatches(
+    email: string,
+    otp: string,
+    expectedHash: string,
+  ): boolean {
+    const actual = Buffer.from(this.hashOtp(email, otp), 'hex');
+    const expected = Buffer.from(expectedHash, 'hex');
+
+    return (
+      actual.length === expected.length && timingSafeEqual(actual, expected)
+    );
   }
 }
