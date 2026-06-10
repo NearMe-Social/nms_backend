@@ -8,10 +8,6 @@ import { AuthService } from './auth.service';
 import { EmailVerification } from './entities/email-verification.entity';
 import { EmailService } from './email.service';
 
-const emailService = {
-  sendOtp: jest.fn().mockResolvedValue(undefined),
-};
-
 describe('AuthService', () => {
   let service: AuthService;
   let userRepository: {
@@ -123,6 +119,8 @@ describe('AuthService', () => {
       expect.objectContaining({
         email: 'sokha@example.com',
         email_verified: false,
+        profile_completed: false,
+        onboarding_completed: false,
       }),
     );
     expect(result).not.toHaveProperty('token');
@@ -135,8 +133,7 @@ describe('AuthService', () => {
 
     await service.sendOtp('SOKHA@example.com');
 
-    const html = emailService.sendOtp.mock.calls[0][1];
-    const otp = html.match(/>(\d{6})<\/h1>/)?.[1];
+    const otp = emailService.sendOtp.mock.calls[0][1] as string;
     const saved = verificationRepository.save.mock.calls[0][0];
 
     expect(otp).toMatch(/^\d{6}$/);
@@ -156,10 +153,7 @@ describe('AuthService', () => {
     await expect(service.sendOtp(user.email)).rejects.toMatchObject({
       status: 429,
     });
-    expect(emailService.sendOtp).toHaveBeenCalledWith(
-      'user@example.com',
-      expect.stringMatching(/^\d{6}$/),
-);
+    expect(emailService.sendOtp).not.toHaveBeenCalled();
   });
 
   it('locks the OTP after five invalid attempts', async () => {
@@ -199,8 +193,7 @@ describe('AuthService', () => {
     verificationRepository.findOne.mockResolvedValue(null);
     await service.sendOtp(user.email);
 
-    const html = emailService.sendOtp.mock.calls[0][1];
-    const otp = html.match(/>(\d{6})<\/h1>/)?.[1] as string;
+    const otp = emailService.sendOtp.mock.calls[0][1] as string;
     const verification = verificationRepository.save.mock.calls[0][0];
     verificationRepository.findOne.mockResolvedValue(verification);
 
