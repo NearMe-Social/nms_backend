@@ -9,20 +9,21 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { User } from '../users/entities/user.entity';
 import { PassportModule } from '@nestjs/passport';
+import { EmailVerification } from './entities/email-verification.entity';
+import { EmailService } from './email.service';
 
 @Module({
   imports: [
     ConfigModule,
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, EmailVerification]),
     PassportModule,
 
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const expiresIn = (
-          config.get<string>('JWT_EXPIRES_IN') || '24h'
-        ) as SignOptions['expiresIn'];
+        const expiresIn = (config.get<string>('JWT_EXPIRES_IN') ||
+          '24h') as SignOptions['expiresIn'];
         return {
           secret: config.getOrThrow<string>('JWT_SECRET'),
           signOptions: { expiresIn },
@@ -31,11 +32,7 @@ import { PassportModule } from '@nestjs/passport';
     }),
   ],
 
-  providers: [
-    AuthService, 
-    JwtStrategy,
-    GoogleStrategy
-  ],
+  providers: [AuthService, JwtStrategy, GoogleStrategy, EmailService],
   controllers: [AuthController],
   exports: [AuthService],
 })
