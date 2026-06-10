@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { UsersService } from './users.service';
-import { ProfileImageStorageService } from './profile-image-storage.service';
+import { R2ImageStorageService } from './r2-image-storage.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -12,7 +12,7 @@ describe('UsersService', () => {
     save: jest.Mock;
   };
   let profileImageStorage: {
-    upload: jest.Mock;
+    uploadProfileImage: jest.Mock;
     deleteByPublicUrl: jest.Mock;
   };
   let queryBuilder: {
@@ -43,7 +43,7 @@ describe('UsersService', () => {
       save: jest.fn(),
     };
     profileImageStorage = {
-      upload: jest.fn(),
+      uploadProfileImage: jest.fn(),
       deleteByPublicUrl: jest.fn(),
     };
 
@@ -55,7 +55,7 @@ describe('UsersService', () => {
           useValue: usersRepository,
         },
         {
-          provide: ProfileImageStorageService,
+          provide: R2ImageStorageService,
           useValue: profileImageStorage,
         },
       ],
@@ -148,7 +148,7 @@ describe('UsersService', () => {
     } as Express.Multer.File;
 
     usersRepository.findOne.mockResolvedValue(user);
-    profileImageStorage.upload.mockResolvedValue({
+    profileImageStorage.uploadProfileImage.mockResolvedValue({
       key: 'profile-images/1/new.png',
       url: 'https://images.example.com/profile-images/1/new.png',
     });
@@ -159,12 +159,12 @@ describe('UsersService', () => {
     await expect(service.updateProfileImage(1, file)).resolves.toEqual({
       url: 'https://images.example.com/profile-images/1/new.png',
       user: expect.objectContaining({
-        profile_image:
-          'https://images.example.com/profile-images/1/new.png',
+        profile_image: 'https://images.example.com/profile-images/1/new.png',
       }),
     });
     expect(profileImageStorage.deleteByPublicUrl).toHaveBeenCalledWith(
       'https://images.example.com/profile-images/1/old.jpg',
+      'profile-images',
     );
   });
 });

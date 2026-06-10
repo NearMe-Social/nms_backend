@@ -45,26 +45,68 @@ interface R2Config {
 }
 
 @Injectable()
-export class ProfileImageStorageService {
+export class R2ImageStorageService {
   private client: S3Client | null = null;
 
   constructor(private readonly configService: ConfigService) {}
 
-  async upload(
+  async uploadProfileImage(
     userId: number,
     file: Express.Multer.File,
+  ): Promise<{ key: string; url: string }> {
+    return this.upload(userId, file, 'profile-images');
+  }
+
+  async uploadPostImage(
+    userId: number,
+    file: Express.Multer.File,
+  ): Promise<{ key: string; url: string }> {
+    return this.upload(userId, file, 'post-images');
+  }
+
+  async deleteByPublicUrl(
+    url: string | null | undefined,
+    allowedPrefix?: 'profile-images' | 'post-images',
+  ): Promise<void> {
+    if (!url) return;
+
+    const { bucket, publicUrl } = this.getR2Config();
+    const prefix = `${publicUrl}/`;
+    if (!url.startsWith(prefix)) return;
+
+    const key = decodeURIComponent(url.slice(prefix.length));
+    if (
+      allowedPrefix
+        ? !key.startsWith(`${allowedPrefix}/`)
+        : !/^(profile-images|post-images)\//.test(key)
+    ) {
+      return;
+    }
+
+    await this.getClient().send(
+      new DeleteObjectCommand({
+        Bucket: bucket,
+        Key: key,
+      }),
+    );
+  }
+
+  private async upload(
+    userId: number,
+    file: Express.Multer.File,
+    directory: 'profile-images' | 'post-images',
   ): Promise<{ key: string; url: string }> {
     const mimeType = file.mimetype as SupportedProfileImageType;
     const imageType = PROFILE_IMAGE_TYPES[mimeType];
 
     if (!imageType || !imageType.matches(file.buffer)) {
       throw new BadRequestException(
-        'Profile image must be a valid JPEG, PNG, or WebP file.',
+        'Image must be a valid JPEG, PNG, or WebP file.',
       );
     }
 
     const { bucket, publicUrl } = this.getR2Config();
-    const key = `profile-images/${userId}/${randomUUID()}.${imageType.extension}`;
+    const key = `${directory}/${userId}/${randomUUID()}.${imageType.extension}`;
 
     await this.getClient().send(
       new PutObjectCommand({
@@ -80,24 +122,6 @@ export class ProfileImageStorageService {
       key,
       url: `${publicUrl}/${key}`,
     };
-  }
-
-  async deleteByPublicUrl(url: string | null | undefined): Promise<void> {
-    if (!url) return;
-
-    const { bucket, publicUrl } = this.getR2Config();
-    const prefix = `${publicUrl}/`;
-    if (!url.startsWith(prefix)) return;
-
-    const key = decodeURIComponent(url.slice(prefix.length));
-    if (!key.startsWith('profile-images/')) return;
-
-    await this.getClient().send(
-      new DeleteObjectCommand({
-        Bucket: bucket,
-        Key: key,
-      }),
-    );
   }
 
   private getClient(): S3Client {
