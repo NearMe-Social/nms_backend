@@ -8,6 +8,7 @@ describe('PostsService', () => {
   let service: PostsService;
   let postsRepository: {
     find: jest.Mock;
+    findOne: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
     createQueryBuilder: jest.Mock;
@@ -56,7 +57,8 @@ describe('PostsService', () => {
     };
     postsRepository = {
       find: jest.fn(),
-      create: jest.fn((value) => value),
+      findOne: jest.fn(),
+      create: jest.fn((value: Partial<Post>) => value as Post),
       save: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
     };
@@ -165,7 +167,7 @@ describe('PostsService', () => {
   it('should search only active unexpired posts and limit results', async () => {
     queryBuilder.getMany.mockResolvedValue([]);
 
-    await service.search('road');
+    await service.search('road', 11.5564, 104.9282);
 
     expect(queryBuilder.where).toHaveBeenCalledWith(
       'search_post.status = :status',
@@ -175,6 +177,43 @@ describe('PostsService', () => {
       'search_post.expires_at > NOW()',
     );
     expect(queryBuilder.limit).toHaveBeenCalledWith(5);
+    expect(queryBuilder.setParameters).toHaveBeenCalledWith({
+      lat: 11.5564,
+      lng: 104.9282,
+    });
+  });
+
+  it('should hide a post from a non-owner outside its visibility radius', async () => {
+    postsRepository.findOne.mockResolvedValue({
+      post_id: 4,
+      latitude: 11.5564,
+      longitude: 104.9282,
+      visibility_radius: 200,
+      status: 'ACTIVE',
+      expires_at: new Date(Date.now() + 60_000),
+      user: { user_id: 8 },
+    });
+
+    await expect(service.findVisibleOne(4, 7, 11.57, 104.94)).rejects.toThrow(
+      'Post is not available at your location',
+    );
+  });
+
+  it('should let the owner access their post outside its visibility radius', async () => {
+    postsRepository.findOne.mockResolvedValue({
+      post_id: 4,
+      title: 'My post',
+      latitude: 11.5564,
+      longitude: 104.9282,
+      visibility_radius: 200,
+      status: 'ACTIVE',
+      expires_at: new Date(Date.now() + 60_000),
+      user: { user_id: 7 },
+    });
+
+    await expect(service.findVisibleOne(4, 7)).resolves.toEqual(
+      expect.objectContaining({ post_id: 4, title: 'My post' }),
+    );
   });
 
   it('should upload an optional image and save its URL with the post', async () => {
