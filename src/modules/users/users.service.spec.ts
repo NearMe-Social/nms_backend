@@ -3,6 +3,8 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { UsersService } from './users.service';
 import { R2ImageStorageService } from './r2-image-storage.service';
+import { CompleteProfileDto } from './dto/complete-profile.dto';
+import { validate } from 'class-validator';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -66,6 +68,43 @@ describe('UsersService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('should allow dots between username segments', async () => {
+    const dto = Object.assign(new CompleteProfileDto(), {
+      username: 'sophat.odom',
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it('should reject leading, trailing, or consecutive username dots', async () => {
+    for (const username of ['.sophat', 'sophat.', 'sophat..odom']) {
+      const dto = Object.assign(new CompleteProfileDto(), { username });
+      await expect(validate(dto)).resolves.not.toHaveLength(0);
+    }
+  });
+
+  it('should complete a skipped profile without changing its username or role', async () => {
+    const user = {
+      user_id: 1,
+      username: 'sophat.odom',
+      role: 'USER',
+      profile_completed: false,
+    } as User;
+    usersRepository.findOne.mockResolvedValue(user);
+    usersRepository.save.mockImplementation((value: User) =>
+      Promise.resolve(value),
+    );
+
+    await expect(service.completeProfile(1, {})).resolves.toEqual(
+      expect.objectContaining({
+        username: 'sophat.odom',
+        role: 'USER',
+        profile_completed: true,
+      }),
+    );
+    expect(usersRepository.findOne).toHaveBeenCalledTimes(1);
   });
 
   it('should return nearby users with approximate distance and no exact coordinates', async () => {
