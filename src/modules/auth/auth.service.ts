@@ -61,6 +61,8 @@ export class AuthService {
       role: UserRole.USER,
       is_active: true,
       email_verified: false,
+      profile_completed: false,
+      onboarding_completed: false,
     });
     const savedUser = await this.userRepository.save(user);
 
@@ -156,6 +158,8 @@ export class AuthService {
         role: UserRole.USER,
         is_active: true,
         email_verified: true,
+        profile_completed: false,
+        onboarding_completed: false,
       });
     } else if (!user.google_id) {
       user.google_id = googleUser.googleId;
