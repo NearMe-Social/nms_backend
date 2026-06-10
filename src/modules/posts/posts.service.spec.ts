@@ -32,6 +32,7 @@ describe('PostsService', () => {
     orderBy: jest.Mock;
     addOrderBy: jest.Mock;
     limit: jest.Mock;
+    take: jest.Mock;
     getMany: jest.Mock;
     getRawMany: jest.Mock;
   };
@@ -52,6 +53,7 @@ describe('PostsService', () => {
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
       getMany: jest.fn(),
       getRawMany: jest.fn(),
     };
@@ -177,6 +179,40 @@ describe('PostsService', () => {
       'search_post.expires_at > NOW()',
     );
     expect(queryBuilder.limit).toHaveBeenCalledWith(5);
+    expect(queryBuilder.setParameters).toHaveBeenCalledWith({
+      lat: 11.5564,
+      lng: 104.9282,
+    });
+  });
+
+  it('should return the owner profile posts without requiring location', async () => {
+    queryBuilder.getMany.mockResolvedValue([]);
+
+    await expect(
+      service.findByUserVisible(7, 7, undefined, undefined, 3),
+    ).resolves.toEqual([]);
+
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      'user.user_id = :targetUserId',
+      { targetUserId: 7 },
+    );
+    expect(queryBuilder.take).toHaveBeenCalledWith(3);
+    expect(queryBuilder.setParameters).not.toHaveBeenCalled();
+  });
+
+  it('should hide another user profile posts when viewer location is unavailable', async () => {
+    await expect(service.findByUserVisible(8, 7)).resolves.toEqual([]);
+    expect(queryBuilder.getMany).not.toHaveBeenCalled();
+  });
+
+  it('should filter another user profile posts by each post visibility radius', async () => {
+    queryBuilder.getMany.mockResolvedValue([]);
+
+    await service.findByUserVisible(8, 7, 11.5564, 104.9282);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('profile_post.visibility_radius'),
+    );
     expect(queryBuilder.setParameters).toHaveBeenCalledWith({
       lat: 11.5564,
       lng: 104.9282,
