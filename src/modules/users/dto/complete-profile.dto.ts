@@ -11,8 +11,9 @@ export class CompleteProfileDto {
   @IsString()
   @MinLength(3)
   @MaxLength(20)
-  @Matches(/^[a-zA-Z0-9_]+$/, {
-    message: 'Username can only contain letters, numbers, and underscores',
+  @Matches(/^[a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*$/, {
+    message:
+      'Username can only contain letters, numbers, underscores, and dots between characters',
   })
   username?: string;
 }
