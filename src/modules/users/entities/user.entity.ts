@@ -75,7 +75,7 @@ export class User {
   role!: UserRole;
 
   @Column({ nullable: true })
-  profile_image!: string;
+  profile_image!: string | null;
 
   @Column({ type: 'text', nullable: true })
   bio!: string;
