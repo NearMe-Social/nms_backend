@@ -1,10 +1,10 @@
 import { Controller, UseGuards, Body, Post, Get, Request, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { SendOtpDto, VerifyOtpDto } from './dto/verify-otp.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { Get, Request } from '@nestjs/common';
 import {GoogleAuthGuard} from './guards/google.auth.guard';
 
 @Controller('auth')

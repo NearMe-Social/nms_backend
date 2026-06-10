@@ -7,9 +7,9 @@ import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
-import { exhaustMap } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import type { GoogleUser } from './strategies/google.strategy';
 
 @Injectable()
 export class AuthService {
@@ -109,39 +109,58 @@ export class AuthService {
   };
 }
 
-  async googleLogin(googleUser: any) {
+
+async googleLogin(googleUser: GoogleUser) {
   let user = await this.userRepository.findOne({
-    where: {
-      email: googleUser.email,
-    },
+    where: [
+      { google_id: googleUser.googleId },
+      { email: googleUser.email },
+    ],
   });
 
   if (!user) {
+    const usernameBase = googleUser.email
+      .split('@')[0]
+      .replace(/[^a-zA-Z0-9_]/g, '');
+
+    let username = usernameBase;
+    let suffix = 1;
+
+    while (await this.userRepository.exists({ where: { username } })) {
+      username = `${usernameBase}${suffix++}`;
+    }
+
     user = this.userRepository.create({
-      username: googleUser.email.split('@')[0],
+      google_id: googleUser.googleId,
+      username,
       email: googleUser.email,
-      first_name: googleUser.first_name || '',
-      last_name: googleUser.last_name || '',
-      password_hash: 'GOOGLE_AUTH_USER',
-      profile_image: googleUser.profile_image,
+      first_name: googleUser.firstName,
+      last_name: googleUser.lastName,
+      profile_image: googleUser.profileImage,
+      password_hash: null,
       role: UserRole.USER,
       is_active: true,
     });
-
-    user = await this.userRepository.save(user);
+  } else if (!user.google_id) {
+    user.google_id = googleUser.googleId;
   }
 
-  const payload = {
+  if (!user.is_active) {
+    throw new UnauthorizedException('Account is inactive');
+  }
+
+  user = await this.userRepository.save(user);
+
+  const token = this.jwtService.sign({
     sub: user.user_id,
     email: user.email,
     role: user.role,
-  };
+  });
 
   return {
-    message: 'Google login successful',
-    token: this.jwtService.sign(payload),
+    token,
     user: {
-      user_id: user.user_id,
+      userId: user.user_id,
       username: user.username,
       email: user.email,
       role: user.role,
