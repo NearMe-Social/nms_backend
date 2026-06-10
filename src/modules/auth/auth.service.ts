@@ -9,6 +9,7 @@ import { LoginDto } from './dto/login.dto';
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as nodemailer from 'nodemailer';
+import type { GoogleUser } from './strategies/google.strategy';
 
 @Injectable()
 export class AuthService {
@@ -62,31 +63,111 @@ export class AuthService {
 
   // ── existing login ──
   async login(loginDto: LoginDto) {
-    const user = await this.userRepository.findOne({
-      where: { email: loginDto.email },
-    });
-    if (!user) throw new UnauthorizedException('Invalid credentials');
-    const passwordMatched = await bcrypt.compare(loginDto.password, user.password_hash);
-    if (!passwordMatched) throw new UnauthorizedException('Invalid password');
-    if (!user.is_active) throw new UnauthorizedException('Account is inactive');
-    const payload = {
-      sub: user.user_id,
-      email: user.email,
-      role: user.role,
-    };
-    return {
-      message: 'Login successful',
-      token: this.jwtService.sign(payload),
-      user: {
-        userId: user.user_id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-      },
-    };
+  const user = await this.userRepository.findOne({
+    where: { email: loginDto.email },
+  });
+
+  if (!user) {
+    throw new UnauthorizedException('Invalid credentials');
   }
 
-  // ── existing getCurrentUser ──
+  
+  if (!user.password_hash) {
+    throw new UnauthorizedException(
+      'This account uses Google login. Please sign in with Google.',
+    );
+  }
+
+  const passwordMatched = await bcrypt.compare(
+    loginDto.password,
+    user.password_hash,
+  );
+
+  if (!passwordMatched) {
+    throw new UnauthorizedException('Invalid password');
+  }
+
+  if (!user.is_active) {
+    throw new UnauthorizedException('Account is inactive');
+  }
+
+  const payload = {
+    sub: user.user_id,
+    email: user.email,
+    role: user.role,
+  };
+
+  return {
+    message: 'Login successful',
+    token: this.jwtService.sign(payload),
+    user: {
+      userId: user.user_id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    },
+  };
+}
+
+
+async googleLogin(googleUser: GoogleUser) {
+  let user = await this.userRepository.findOne({
+    where: [
+      { google_id: googleUser.googleId },
+      { email: googleUser.email },
+    ],
+  });
+
+  if (!user) {
+    const usernameBase = googleUser.email
+      .split('@')[0]
+      .replace(/[^a-zA-Z0-9_]/g, '');
+
+    let username = usernameBase;
+    let suffix = 1;
+
+    while (await this.userRepository.exists({ where: { username } })) {
+      username = `${usernameBase}${suffix++}`;
+    }
+
+    user = this.userRepository.create({
+      google_id: googleUser.googleId,
+      username,
+      email: googleUser.email,
+      first_name: googleUser.firstName,
+      last_name: googleUser.lastName,
+      profile_image: googleUser.profileImage,
+      password_hash: null,
+      role: UserRole.USER,
+      is_active: true,
+    });
+  } else if (!user.google_id) {
+    user.google_id = googleUser.googleId;
+  }
+
+  if (!user.is_active) {
+    throw new UnauthorizedException('Account is inactive');
+  }
+
+  user = await this.userRepository.save(user);
+
+  const token = this.jwtService.sign({
+    sub: user.user_id,
+    email: user.email,
+    role: user.role,
+  });
+
+  return {
+    token,
+    user: {
+      userId: user.user_id,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    },
+  };
+}
+
   async getCurrentUser(userId: number) {
     const user = await this.userRepository.findOne({
       where: { user_id: userId },

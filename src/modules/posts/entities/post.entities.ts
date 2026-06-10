@@ -18,46 +18,46 @@ export enum PostStatus {
 @Entity('posts')
 export class Post {
   @PrimaryGeneratedColumn()
-  post_id: number;
+  post_id!: number;
 
   @Column()
-  title: string;
+  title!: string;
 
   @Column({ type: 'text' })
-  content: string;
+  content!: string;
 
   @Column('decimal', { precision: 10, scale: 7 })
-  latitude: number;
+  latitude!: number;
 
   @Column('decimal', { precision: 10, scale: 7 })
-  longitude: number;
+  longitude!: number;
 
   @Column({ type: 'int', default: 200 })
-  visibility_radius: number;
+  visibility_radius!: number;
 
   @Column({
     type: 'enum',
     enum: PostStatus,
     default: PostStatus.ACTIVE,
   })
-  status: PostStatus;
+  status!: PostStatus;
 
   @Column({ type: 'timestamp' })
-  expires_at: Date;
+  expires_at!: Date;
 
   @CreateDateColumn()
-  created_at: Date;
+  created_at!: Date;
 
   @UpdateDateColumn()
-  updated_at: Date;
+  updated_at!: Date;
 
   @ManyToOne('User', 'posts', { nullable: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: any;
 
   @OneToMany('Comment', 'post')
-  comments: any[];
+  comments!: any[];
 
   @OneToMany('Reaction', 'post')
-  reactions: any[];
+  reactions!: any[];
 }

@@ -18,41 +18,41 @@ export enum MessageStatus {
 @Entity('messages')
 export class Message {
   @PrimaryGeneratedColumn()
-  message_id: number;
+  message_id!: number;
 
   @Column()
-  conversation_id: number;
+  conversation_id!: number;
 
   @Column()
-  sender_id: number;
+  sender_id!: number;
 
   @Column({ type: 'text' })
-  content: string;
+  content!: string;
 
   @Column({
     type: 'enum',
     enum: MessageStatus,
     default: MessageStatus.SENT,
   })
-  status: MessageStatus;
+  status!: MessageStatus;
 
   @Column({ type: 'timestamp', nullable: true })
-  read_at: Date | null;
+  read_at!: Date | null;
 
   @CreateDateColumn()
-  created_at: Date;
+  created_at!: Date;
 
   @ManyToOne(() => Conversation, (c) => c.messages, {
     nullable: false,
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'conversation_id' })
-  conversation: Conversation;
+  conversation!: Conversation;
 
   @ManyToOne(() => User, {
     nullable: false,
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'sender_id' })
-  sender: User;
+  sender!: User;
 }

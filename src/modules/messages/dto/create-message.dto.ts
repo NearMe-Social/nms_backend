@@ -1,7 +1,14 @@
-import { IsString, MinLength } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsString,
+} from 'class-validator';
 
 export class CreateMessageDto {
+  @IsInt()
+  conversation_id!: number;
+
   @IsString()
-  @MinLength(1)
-  content: string;
+  @IsNotEmpty()
+  content!: string;
 }
