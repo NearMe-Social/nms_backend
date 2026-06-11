@@ -76,7 +76,10 @@ export class ConversationsService {
     });
   }
 
-  async isParticipant(conversationId: number, userId: number): Promise<boolean> {
+  async isParticipant(
+    conversationId: number,
+    userId: number,
+  ): Promise<boolean> {
     const participant = await this.participantRepo.findOne({
       where: { conversation_id: conversationId, user_id: userId },
     });
@@ -84,12 +87,39 @@ export class ConversationsService {
     return !!participant;
   }
 
-  async getConversationParticipantIds(conversationId: number): Promise<number[]> {
+  async getConversationParticipantIds(
+    conversationId: number,
+  ): Promise<number[]> {
     const participants = await this.participantRepo.find({
       where: { conversation_id: conversationId },
     });
 
     return participants.map((participant) => participant.user_id);
+  }
+
+  async getPeerUserIds(userId: number): Promise<number[]> {
+    const userParticipations = await this.participantRepo.find({
+      where: { user_id: userId },
+    });
+    const conversationIds = Array.from(
+      new Set(
+        userParticipations.map((participant) => participant.conversation_id),
+      ),
+    );
+
+    if (conversationIds.length === 0) return [];
+
+    const participants = await this.participantRepo.find({
+      where: { conversation_id: In(conversationIds) },
+    });
+
+    return Array.from(
+      new Set(
+        participants
+          .map((participant) => participant.user_id)
+          .filter((participantId) => participantId !== userId),
+      ),
+    );
   }
 
   async touchConversation(conversationId: number): Promise<void> {
