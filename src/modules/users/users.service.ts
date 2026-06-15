@@ -31,6 +31,17 @@ export interface UserSearchResponse {
   profile_image: string | null;
 }
 
+export interface PublicUserProfileResponse {
+  user_id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+  role: UserRole;
+  profile_image: string | null;
+  bio: string | null;
+  created_at: Date;
+}
+
 interface NearbyUserRaw {
   user_id: number | string;
   username: string;
@@ -53,6 +64,25 @@ export class UsersService {
     return user;
   }
 
+  async findPublicProfile(user_id: number): Promise<PublicUserProfileResponse> {
+    const user = await this.usersRepository.findOne({
+      where: { user_id, is_active: true },
+      select: [
+        'user_id',
+        'username',
+        'first_name',
+        'last_name',
+        'role',
+        'profile_image',
+        'bio',
+        'created_at',
+      ],
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
   async findByEmail(email: string): Promise<User | null> {
     return this.usersRepository.findOne({ where: { email } });
   }
@@ -65,7 +95,19 @@ export class UsersService {
   async updateProfile(user_id: number, dto: UpdateProfileDto): Promise<User> {
     const user = await this.findById(user_id);
 
-    if (dto.username !== undefined) user.username = dto.username;
+    if (dto.username !== undefined && dto.username !== user.username) {
+      const existing = await this.usersRepository.findOne({
+        where: { username: dto.username },
+      });
+
+      if (existing) {
+        throw new ConflictException('Username is already taken');
+      }
+
+      user.username = dto.username;
+    }
+    if (dto.first_name !== undefined) user.first_name = dto.first_name;
+    if (dto.last_name !== undefined) user.last_name = dto.last_name;
     if (dto.bio !== undefined) user.bio = dto.bio;
     if (dto.profile_image !== undefined) user.profile_image = dto.profile_image;
 
@@ -179,6 +221,16 @@ export class UsersService {
 
     await this.usersRepository.save(user);
     return { message: 'Location updated successfully' };
+  }
+
+  async clearLocation(user_id: number): Promise<{ message: string }> {
+    const user = await this.findById(user_id);
+    user.current_latitude = null;
+    user.current_longitude = null;
+    user.location_updated_at = null;
+
+    await this.usersRepository.save(user);
+    return { message: 'Saved location cleared successfully' };
   }
 
   async findNearby(

@@ -23,7 +23,7 @@ import { EmailService } from './email.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
         const expiresIn = (config.get<string>('JWT_EXPIRES_IN') ||
-          '24h') as SignOptions['expiresIn'];
+          '7d') as SignOptions['expiresIn'];
         return {
           secret: config.getOrThrow<string>('JWT_SECRET'),
           signOptions: { expiresIn },
