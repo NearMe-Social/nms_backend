@@ -107,6 +107,92 @@ describe('UsersService', () => {
     expect(usersRepository.findOne).toHaveBeenCalledTimes(1);
   });
 
+  it('should expose only public identity fields for a public profile', async () => {
+    usersRepository.findOne.mockResolvedValue({
+      user_id: 2,
+      username: 'sokha',
+      first_name: 'Sokha',
+      last_name: 'Chan',
+      role: 'USER',
+      profile_image: null,
+      bio: 'Hello nearby',
+      created_at: new Date('2026-06-01T00:00:00Z'),
+    });
+
+    await expect(service.findPublicProfile(2)).resolves.not.toHaveProperty(
+      'email',
+    );
+    expect(usersRepository.findOne).toHaveBeenCalledWith({
+      where: { user_id: 2, is_active: true },
+      select: [
+        'user_id',
+        'username',
+        'first_name',
+        'last_name',
+        'role',
+        'profile_image',
+        'bio',
+        'created_at',
+      ],
+    });
+  });
+
+  it('should save editable profile fields', async () => {
+    const profileUser = {
+      user_id: 1,
+      username: 'old.name',
+      first_name: 'Old',
+      last_name: 'Name',
+      bio: null,
+    } as User;
+    usersRepository.findOne
+      .mockResolvedValueOnce(profileUser)
+      .mockResolvedValueOnce(null);
+    usersRepository.save.mockImplementation((value: User) =>
+      Promise.resolve(value),
+    );
+
+    await expect(
+      service.updateProfile(1, {
+        username: 'new.name',
+        first_name: 'New',
+        last_name: 'Neighbor',
+        bio: 'Updated profile',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        username: 'new.name',
+        first_name: 'New',
+        last_name: 'Neighbor',
+        bio: 'Updated profile',
+      }),
+    );
+  });
+
+  it('should clear the stored location for the current user', async () => {
+    const locatedUser = {
+      user_id: 1,
+      current_latitude: 11.56,
+      current_longitude: 104.92,
+      location_updated_at: new Date(),
+    } as User;
+    usersRepository.findOne.mockResolvedValue(locatedUser);
+    usersRepository.save.mockImplementation((value: User) =>
+      Promise.resolve(value),
+    );
+
+    await expect(service.clearLocation(1)).resolves.toEqual({
+      message: 'Saved location cleared successfully',
+    });
+    expect(locatedUser).toEqual(
+      expect.objectContaining({
+        current_latitude: null,
+        current_longitude: null,
+        location_updated_at: null,
+      }),
+    );
+  });
+
   it('should return nearby users with approximate distance and no exact coordinates', async () => {
     queryBuilder.getRawMany.mockResolvedValue([
       {

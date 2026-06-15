@@ -12,6 +12,7 @@ import {
   Post,
   UploadedFile,
   ParseFilePipeBuilder,
+  Delete,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -59,7 +60,7 @@ export class UsersController {
 
   @Get(':id')
   async getProfile(@Param('id') id: number) {
-    return this.usersService.findById(id);
+    return this.usersService.findPublicProfile(id);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -119,5 +120,11 @@ export class UsersController {
     @Body() dto: UpdateLocationDto,
   ) {
     return this.usersService.updateLocation(req.user.userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('me/location')
+  async clearMyLocation(@Req() req: RequestWithUser) {
+    return this.usersService.clearLocation(req.user.userId);
   }
 }

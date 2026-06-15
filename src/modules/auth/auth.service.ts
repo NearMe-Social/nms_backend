@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User, UserRole, Gender } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -17,6 +17,7 @@ import type { GoogleUser } from './strategies/google.strategy';
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto';
 import { EmailVerification } from './entities/email-verification.entity';
 import { EmailService } from './email.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
@@ -52,12 +53,8 @@ export class AuthService {
       first_name: registerDto.first_name,
       last_name: registerDto.last_name,
       password_hash: passwordHash,
-      birthday: registerDto.birthday
-        ? new Date(registerDto.birthday)
-        : (null as any),
-      gender: registerDto.gender
-        ? (registerDto.gender as Gender)
-        : (null as any),
+      birthday: registerDto.birthday ? new Date(registerDto.birthday) : null,
+      gender: registerDto.gender ?? null,
       role: UserRole.USER,
       is_active: true,
       email_verified: false,
@@ -211,6 +208,47 @@ export class AuthService {
     });
     if (!user) throw new UnauthorizedException('User not found');
     return user;
+  }
+
+  async changePassword(userId: number, dto: ChangePasswordDto) {
+    const user = await this.userRepository.findOne({
+      where: { user_id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.password_hash) {
+      throw new BadRequestException(
+        'This account uses Google sign-in and does not have a password to change.',
+      );
+    }
+
+    const currentPasswordMatches = await bcrypt.compare(
+      dto.current_password,
+      user.password_hash,
+    );
+
+    if (!currentPasswordMatches) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const reusesCurrentPassword = await bcrypt.compare(
+      dto.new_password,
+      user.password_hash,
+    );
+
+    if (reusesCurrentPassword) {
+      throw new BadRequestException(
+        'New password must be different from your current password',
+      );
+    }
+
+    user.password_hash = await bcrypt.hash(dto.new_password, 10);
+    await this.userRepository.save(user);
+
+    return { message: 'Password updated successfully' };
   }
 
   async sendOtp(email: string) {
