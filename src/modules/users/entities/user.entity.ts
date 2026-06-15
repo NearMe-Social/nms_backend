@@ -71,16 +71,16 @@ export class User {
   profile_image!: string | null;
 
   @Column({ type: 'text', nullable: true })
-  bio!: string;
+  bio!: string | null;
 
   @Column('decimal', { precision: 10, scale: 7, nullable: true })
-  current_latitude!: number;
+  current_latitude!: number | null;
 
   @Column('decimal', { precision: 10, scale: 7, nullable: true })
-  current_longitude!: number;
+  current_longitude!: number | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  location_updated_at!: Date;
+  location_updated_at!: Date | null;
 
   @Column({ default: true })
   is_active!: boolean;

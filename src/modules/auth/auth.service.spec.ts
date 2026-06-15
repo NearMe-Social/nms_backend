@@ -7,6 +7,7 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { AuthService } from './auth.service';
 import { EmailVerification } from './entities/email-verification.entity';
 import { EmailService } from './email.service';
+import * as bcrypt from 'bcrypt';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -205,5 +206,40 @@ describe('AuthService', () => {
     expect(verification.consumed_at).toBeInstanceOf(Date);
     expect(result.token).toBe('signed-token');
     expect(result.user.email_verified).toBe(true);
+  });
+
+  it('changes the password after validating the current password', async () => {
+    const passwordUser = {
+      ...user,
+      password_hash: await bcrypt.hash('current-password', 10),
+    } as User;
+    userRepository.findOne.mockResolvedValue(passwordUser);
+
+    await expect(
+      service.changePassword(1, {
+        current_password: 'current-password',
+        new_password: 'new-password-123',
+      }),
+    ).resolves.toEqual({ message: 'Password updated successfully' });
+
+    expect(userRepository.save).toHaveBeenCalledWith(passwordUser);
+    await expect(
+      bcrypt.compare('new-password-123', passwordUser.password_hash!),
+    ).resolves.toBe(true);
+  });
+
+  it('rejects password changes for Google-only accounts', async () => {
+    userRepository.findOne.mockResolvedValue({
+      ...user,
+      password_hash: null,
+      google_id: 'google-account',
+    });
+
+    await expect(
+      service.changePassword(1, {
+        current_password: 'current-password',
+        new_password: 'new-password-123',
+      }),
+    ).rejects.toThrow('does not have a password to change');
   });
 });
