@@ -11,10 +11,9 @@ import {
   Post as HttpPost,
   Query,
   Req,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
-  ParseFilePipeBuilder,
 } from '@nestjs/common';
 import { NearbyPostsQueryDto } from './dto/nearby-posts-query.dto';
 import { PostsQueryDto } from './dto/posts-query.dto';
@@ -24,14 +23,19 @@ import { SearchPostsQueryDto } from './dto/search-posts-query.dto';
 import { VisiblePostQueryDto } from './dto/visible-post-query.dto';
 import { UserPostsQueryDto } from './dto/user-posts-query.dto';
 import { Post } from './entities/post.entities';
-import { NearbyPostResponse, PostsService } from './posts.service';
+import { NearbyPostResponse, PostsService, PublicPost } from './posts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 
 interface RequestWithUser extends Request {
   user: { userId: number; role: string };
+}
+
+interface PostImageUploadFields {
+  image?: Express.Multer.File[];
+  images?: Express.Multer.File[];
 }
 
 @Controller('posts')
@@ -42,28 +46,28 @@ export class PostsController {
   @HttpPost()
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
-    FileInterceptor('image', {
-      limits: {
-        fileSize: 5 * 1024 * 1024,
+    FileFieldsInterceptor(
+      [
+        { name: 'image', maxCount: 1 },
+        { name: 'images', maxCount: 6 },
+      ],
+      {
+        limits: {
+          fileSize: 5 * 1024 * 1024,
+        },
       },
-    }),
+    ),
   )
   create(
     @Body() createPostDto: CreatePostDto,
     @Req() req: RequestWithUser,
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
-        .addFileTypeValidator({
-          fileType: /image\/(jpeg|png|webp)/,
-        })
-        .build({
-          fileIsRequired: false,
-        }),
-    )
-    image?: Express.Multer.File,
-  ): Promise<Post> {
-    return this.postsService.create(createPostDto, req.user.userId, image);
+    @UploadedFiles() files?: PostImageUploadFields,
+  ): Promise<PublicPost> {
+    return this.postsService.create(
+      createPostDto,
+      req.user.userId,
+      this.extractPostImages(files),
+    );
   }
 
   @UseGuards(JwtAuthGuard, AdminGuard)
@@ -126,33 +130,29 @@ export class PostsController {
   @UseGuards(JwtAuthGuard)
   @Patch(':postId')
   @UseInterceptors(
-    FileInterceptor('image', {
-      limits: {
-        fileSize: 5 * 1024 * 1024,
+    FileFieldsInterceptor(
+      [
+        { name: 'image', maxCount: 1 },
+        { name: 'images', maxCount: 6 },
+      ],
+      {
+        limits: {
+          fileSize: 5 * 1024 * 1024,
+        },
       },
-    }),
+    ),
   )
   update(
     @Param('postId', ParseIntPipe) postId: number,
     @Body() updatePostDto: UpdatePostDto,
     @Req() req: RequestWithUser,
-    @UploadedFile(
-      new ParseFilePipeBuilder()
-        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
-        .addFileTypeValidator({
-          fileType: /image\/(jpeg|png|webp)/,
-        })
-        .build({
-          fileIsRequired: false,
-        }),
-    )
-    image?: Express.Multer.File,
-  ): Promise<Post> {
+    @UploadedFiles() files?: PostImageUploadFields,
+  ): Promise<PublicPost> {
     return this.postsService.update(
       postId,
       updatePostDto,
       req.user.userId,
-      image,
+      this.extractPostImages(files),
     );
   }
 
@@ -164,5 +164,11 @@ export class PostsController {
     @Req() req: RequestWithUser,
   ): Promise<{ message: string }> {
     return this.postsService.remove(postId, req.user.userId);
+  }
+
+  private extractPostImages(
+    files?: PostImageUploadFields,
+  ): Express.Multer.File[] {
+    return [...(files?.images ?? []), ...(files?.image ?? [])].slice(0, 6);
   }
 }

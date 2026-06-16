@@ -11,6 +11,7 @@ import { NearbyPostsQueryDto } from './dto/nearby-posts-query.dto';
 import { PostsQueryDto } from './dto/posts-query.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { Post, PostStatus } from './entities/post.entities';
+import { PostImage } from './entities/post-image.entity';
 import { R2ImageStorageService } from '../users/r2-image-storage.service';
 
 export interface NearbyPostResponse {
@@ -18,6 +19,7 @@ export interface NearbyPostResponse {
   title: string;
   content: string;
   image_url: string | null;
+  image_urls: string[];
   visibility_radius: number;
   status: PostStatus;
   expires_at: Date;
@@ -35,7 +37,9 @@ export interface NearbyPostResponse {
   reactions_count: number;
 }
 
-type PublicPost = Omit<Post, 'latitude' | 'longitude'>;
+export type PublicPost = Omit<Post, 'latitude' | 'longitude'> & {
+  image_urls: string[];
+};
 
 interface NearbyPostRaw {
   post_id: number | string;
@@ -60,23 +64,23 @@ export class PostsService {
   constructor(
     @InjectRepository(Post)
     private readonly postsRepository: Repository<Post>,
+    @InjectRepository(PostImage)
+    private readonly postImagesRepository: Repository<PostImage>,
     private readonly imageStorage: R2ImageStorageService,
   ) {}
 
   async create(
     createPostDto: CreatePostDto,
     userId: number,
-    image?: Express.Multer.File,
-  ): Promise<Post> {
-    const uploadedImage = image
-      ? await this.imageStorage.uploadPostImage(userId, image)
-      : null;
+    images: Express.Multer.File[] = [],
+  ): Promise<PublicPost> {
+    const uploadedImages = await this.uploadPostImages(userId, images);
 
     try {
       const post = this.postsRepository.create({
         title: createPostDto.title,
         content: createPostDto.content,
-        image_url: uploadedImage?.url ?? null,
+        image_url: uploadedImages[0]?.url ?? null,
         latitude: createPostDto.latitude,
         longitude: createPostDto.longitude,
         visibility_radius: createPostDto.visibility_radius ?? 200,
@@ -84,18 +88,11 @@ export class PostsService {
         user: { user_id: userId },
       });
 
-      return await this.postsRepository.save(post);
+      const savedPost = await this.postsRepository.save(post);
+      savedPost.images = await this.savePostImages(savedPost, uploadedImages);
+      return this.toPublicPost(savedPost);
     } catch {
-      if (uploadedImage) {
-        try {
-          await this.imageStorage.deleteByPublicUrl(
-            uploadedImage.url,
-            'post-images',
-          );
-        } catch {
-          // Keep the post creation error if compensating cleanup also fails.
-        }
-      }
+      await this.deleteUploadedImages(uploadedImages);
       throw new BadRequestException('Failed to create post');
     }
   }
@@ -109,6 +106,7 @@ export class PostsService {
         .leftJoinAndSelect('post.user', 'user')
         .leftJoinAndSelect('post.comments', 'comments')
         .leftJoinAndSelect('post.reactions', 'reactions')
+        .leftJoinAndSelect('post.images', 'images')
         .where('post.status = :status', { status: PostStatus.ACTIVE })
         .andWhere('post.expires_at > NOW()')
         .orderBy(
@@ -129,7 +127,7 @@ export class PostsService {
       where: {
         status: PostStatus.ACTIVE,
       },
-      relations: ['user', 'comments', 'reactions'],
+      relations: ['user', 'comments', 'reactions', 'images'],
       order: { created_at: 'DESC' },
     });
   }
@@ -140,6 +138,7 @@ export class PostsService {
       .leftJoinAndSelect('post.user', 'user')
       .leftJoinAndSelect('post.comments', 'comments')
       .leftJoinAndSelect('post.reactions', 'reactions')
+      .leftJoinAndSelect('post.images', 'images')
       .where('user.user_id = :userId', { userId })
       .andWhere('post.status != :removed', { removed: PostStatus.REMOVED })
       .orderBy('post.created_at', 'DESC')
@@ -160,6 +159,7 @@ export class PostsService {
       .leftJoinAndSelect('profile_post.user', 'user')
       .leftJoinAndSelect('profile_post.comments', 'comments')
       .leftJoinAndSelect('profile_post.reactions', 'reactions')
+      .leftJoinAndSelect('profile_post.images', 'images')
       .where('user.user_id = :targetUserId', { targetUserId })
       .andWhere('profile_post.status != :removed', {
         removed: PostStatus.REMOVED,
@@ -195,6 +195,7 @@ export class PostsService {
       .leftJoinAndSelect('search_post.user', 'user')
       .leftJoinAndSelect('search_post.comments', 'comments')
       .leftJoinAndSelect('search_post.reactions', 'reactions')
+      .leftJoinAndSelect('search_post.images', 'images')
       .where('search_post.status = :status', { status: PostStatus.ACTIVE })
       .andWhere('search_post.expires_at > NOW()')
       .andWhere('search_post.latitude IS NOT NULL')
@@ -263,6 +264,9 @@ export class PostsService {
     }
 
     const rows = await queryBuilder.getRawMany<NearbyPostRaw>();
+    const imageUrlMap = await this.loadImageUrlsForPostIds(
+      rows.map((row) => Number(row.post_id)),
+    );
 
     return rows.map((row) => {
       const commentsCount = Number(row.comments_count);
@@ -275,7 +279,8 @@ export class PostsService {
         post_id: Number(row.post_id),
         title: row.title,
         content: row.content,
-        image_url: row.image_url,
+        image_url: imageUrlMap.get(Number(row.post_id))?.[0] ?? row.image_url,
+        image_urls: imageUrlMap.get(Number(row.post_id)) ?? this.compactUrls([row.image_url]),
         visibility_radius: Number(row.visibility_radius),
         status: row.status,
         expires_at: row.expires_at,
@@ -300,7 +305,7 @@ export class PostsService {
   async findOne(postId: number): Promise<Post> {
     const post = await this.postsRepository.findOne({
       where: { post_id: postId },
-      relations: ['user', 'comments', 'reactions'],
+      relations: ['user', 'comments', 'reactions', 'images'],
     });
 
     if (!post) {
@@ -348,14 +353,12 @@ export class PostsService {
     postId: number,
     updatePostDto: UpdatePostDto,
     userId: number,
-    image?: Express.Multer.File,
-  ): Promise<Post> {
+    images: Express.Multer.File[] = [],
+  ): Promise<PublicPost> {
     const post = await this.findOne(postId);
     this.assertOwner(post, userId);
-    const previousImageUrl = post.image_url;
-    const uploadedImage = image
-      ? await this.imageStorage.uploadPostImage(userId, image)
-      : null;
+    const previousImageUrls = this.extractImageUrls(post);
+    const uploadedImages = await this.uploadPostImages(userId, images);
 
     if (updatePostDto.title !== undefined) {
       post.title = updatePostDto.title;
@@ -381,36 +384,22 @@ export class PostsService {
       post.expires_at = new Date(updatePostDto.expires_at);
     }
 
-    if (uploadedImage) {
-      post.image_url = uploadedImage.url;
+    if (uploadedImages.length > 0) {
+      post.image_url = uploadedImages[0].url;
     }
 
     try {
       const savedPost = await this.postsRepository.save(post);
 
-      if (uploadedImage) {
-        try {
-          await this.imageStorage.deleteByPublicUrl(
-            previousImageUrl,
-            'post-images',
-          );
-        } catch {
-          // The post has the new image even if old storage cleanup is retried later.
-        }
+      if (uploadedImages.length > 0) {
+        await this.postImagesRepository.delete({ post_id: postId });
+        savedPost.images = await this.savePostImages(savedPost, uploadedImages);
+        await this.deleteImageUrls(previousImageUrls);
       }
 
-      return savedPost;
+      return this.toPublicPost(savedPost);
     } catch {
-      if (uploadedImage) {
-        try {
-          await this.imageStorage.deleteByPublicUrl(
-            uploadedImage.url,
-            'post-images',
-          );
-        } catch {
-          // Keep the update error if compensating cleanup also fails.
-        }
-      }
+      await this.deleteUploadedImages(uploadedImages);
       throw new BadRequestException('Failed to update post');
     }
   }
@@ -418,17 +407,11 @@ export class PostsService {
   async remove(postId: number, userId: number): Promise<{ message: string }> {
     const post = await this.findOne(postId);
     this.assertOwner(post, userId);
+    const imageUrls = this.extractImageUrls(post);
 
     try {
       await this.postsRepository.remove(post);
-      try {
-        await this.imageStorage.deleteByPublicUrl(
-          post.image_url,
-          'post-images',
-        );
-      } catch {
-        // The post is deleted even if storage cleanup must be retried later.
-      }
+      await this.deleteImageUrls(imageUrls);
       return { message: 'Post deleted successfully' };
     } catch {
       throw new BadRequestException('Failed to delete post');
@@ -482,10 +465,105 @@ export class PostsService {
   }
 
   private toPublicPost(post: Post): PublicPost {
-    const publicPost = { ...post } as Partial<Post>;
+    const imageUrls = this.extractImageUrls(post);
+    const publicPost = {
+      ...post,
+      image_url: imageUrls[0] ?? null,
+      image_urls: imageUrls,
+    } as Partial<Post> & { image_urls: string[] };
     delete publicPost.latitude;
     delete publicPost.longitude;
     return publicPost as PublicPost;
+  }
+
+  private async uploadPostImages(
+    userId: number,
+    images: Express.Multer.File[],
+  ): Promise<Array<{ key: string; url: string }>> {
+    return Promise.all(
+      images.slice(0, 6).map((image) =>
+        this.imageStorage.uploadPostImage(userId, image),
+      ),
+    );
+  }
+
+  private async savePostImages(
+    post: Post,
+    uploadedImages: Array<{ url: string }>,
+  ): Promise<PostImage[]> {
+    if (uploadedImages.length === 0) return [];
+
+    const rows = uploadedImages.map((image, index) =>
+      this.postImagesRepository.create({
+        post,
+        post_id: post.post_id,
+        image_url: image.url,
+        display_order: index,
+      }),
+    );
+
+    return this.postImagesRepository.save(rows);
+  }
+
+  private extractImageUrls(post: Post): string[] {
+    const galleryUrls = (post.images ?? [])
+      .slice()
+      .sort((a, b) => a.display_order - b.display_order)
+      .map((image) => image.image_url);
+
+    return this.compactUrls([...galleryUrls, post.image_url]);
+  }
+
+  private compactUrls(urls: Array<string | null | undefined>): string[] {
+    const seen = new Set<string>();
+
+    return urls.filter((url): url is string => {
+      if (!url || seen.has(url)) return false;
+      seen.add(url);
+      return true;
+    });
+  }
+
+  private async loadImageUrlsForPostIds(
+    postIds: number[],
+  ): Promise<Map<number, string[]>> {
+    if (postIds.length === 0) return new Map();
+
+    const images = await this.postImagesRepository
+      .createQueryBuilder('image')
+      .leftJoinAndSelect('image.post', 'post')
+      .where('post.post_id IN (:...postIds)', { postIds })
+      .orderBy('image.display_order', 'ASC')
+      .getMany();
+
+    return images.reduce((map, image) => {
+      const postId = image.post_id ?? image.post?.post_id;
+      if (!postId) return map;
+
+      const urls = map.get(postId) ?? [];
+      urls.push(image.image_url);
+      map.set(postId, urls);
+      return map;
+    }, new Map<number, string[]>());
+  }
+
+  private async deleteUploadedImages(
+    uploadedImages: Array<{ url: string }>,
+  ): Promise<void> {
+    await this.deleteImageUrls(uploadedImages.map((image) => image.url));
+  }
+
+  private async deleteImageUrls(
+    imageUrls: Array<string | null | undefined>,
+  ): Promise<void> {
+    await Promise.all(
+      this.compactUrls(imageUrls).map((url) =>
+        this.imageStorage.deleteByPublicUrl(url, 'post-images').catch(() => {
+          // The database operation should not fail only because storage cleanup
+          // needs to be retried later.
+        }),
+      ),
+    );
   }
 
   private distanceLabel(distance: number): string {
