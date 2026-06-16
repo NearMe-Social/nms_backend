@@ -194,6 +194,7 @@ describe('UsersService', () => {
   });
 
   it('should return nearby users with approximate distance and no exact coordinates', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-05-06T10:05:00Z'));
     queryBuilder.getRawMany.mockResolvedValue([
       {
         user_id: 2,
@@ -216,7 +217,7 @@ describe('UsersService', () => {
         lng: 104.9282,
         radius: 100,
         nearbyRole: 'USER',
-        locationFreshAfter: expect.any(Date),
+        locationFreshAfter: new Date('2026-05-06T10:00:00Z'),
       }),
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
@@ -237,6 +238,7 @@ describe('UsersService', () => {
     ]);
     expect(result[0]).not.toHaveProperty('current_latitude');
     expect(result[0]).not.toHaveProperty('current_longitude');
+    jest.useRealTimers();
   });
 
   it('should search active non-admin users without exposing private fields', async () => {
