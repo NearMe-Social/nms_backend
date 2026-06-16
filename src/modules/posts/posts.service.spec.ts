@@ -197,6 +197,45 @@ describe('PostsService', () => {
     );
   });
 
+  it('should still return my posts when the gallery table migration has not run', async () => {
+    const post = {
+      post_id: 9,
+      title: 'Market update',
+      content: 'Fresh fruit near the corner.',
+      image_url: 'https://images.example.com/post-images/9/fruit.jpg',
+      visibility_radius: 100,
+      status: 'ACTIVE',
+      expires_at: new Date('2026-05-07T00:00:00Z'),
+      created_at: new Date('2026-05-06T10:00:00Z'),
+      updated_at: new Date('2026-05-06T10:00:00Z'),
+      latitude: 11.5564,
+      longitude: 104.9282,
+      user: { user_id: 7, username: 'odom' },
+      comments: [],
+      reactions: [],
+    } as unknown as Post;
+
+    queryBuilder.getMany
+      .mockRejectedValueOnce({
+        code: '42P01',
+        message: 'relation "post_images" does not exist',
+      })
+      .mockResolvedValueOnce([post]);
+
+    const result = await service.findMine(7);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        post_id: 9,
+        image_url: 'https://images.example.com/post-images/9/fruit.jpg',
+        image_urls: ['https://images.example.com/post-images/9/fruit.jpg'],
+      }),
+    ]);
+    expect(result[0]).not.toHaveProperty('latitude');
+    expect(result[0]).not.toHaveProperty('longitude');
+    expect(queryBuilder.getMany).toHaveBeenCalledTimes(2);
+  });
+
   it('should search only active unexpired posts and limit results', async () => {
     queryBuilder.getMany.mockResolvedValue([]);
 
