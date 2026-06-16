@@ -12,7 +12,7 @@ import { UpdateLocationDto } from './dto/update-location.dto';
 import { CompleteProfileDto } from './dto/complete-profile.dto';
 import { R2ImageStorageService } from './r2-image-storage.service';
 
-const NEARBY_LOCATION_MAX_AGE_MS = 2 * 60 * 1000;
+const NEARBY_LOCATION_MAX_AGE_MS = 5 * 60 * 1000;
 
 export interface NearbyUserResponse {
   id: string;
