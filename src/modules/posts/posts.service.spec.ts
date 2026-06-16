@@ -285,4 +285,55 @@ describe('PostsService', () => {
       }),
     );
   });
+
+  it('should replace a post image when the owner updates with a new image', async () => {
+    const file = {
+      mimetype: 'image/png',
+      buffer: Buffer.from('image'),
+    } as Express.Multer.File;
+    const existingPost = {
+      post_id: 9,
+      title: 'Old title',
+      content: 'Old content',
+      image_url: 'https://images.example.com/post-images/7/old.png',
+      visibility_radius: 100,
+      expires_at: new Date(Date.now() + 60_000),
+      user: { user_id: 7 },
+    } as Post;
+
+    postsRepository.findOne.mockResolvedValue(existingPost);
+    imageStorage.uploadPostImage.mockResolvedValue({
+      key: 'post-images/7/new.png',
+      url: 'https://images.example.com/post-images/7/new.png',
+    });
+    postsRepository.save.mockImplementation((value: Post) =>
+      Promise.resolve(value),
+    );
+
+    await expect(
+      service.update(
+        9,
+        {
+          title: 'New title',
+          content: 'New content',
+          visibility_radius: 200,
+          expires_at: new Date(Date.now() + 120_000).toISOString(),
+        },
+        7,
+        file,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        title: 'New title',
+        content: 'New content',
+        image_url: 'https://images.example.com/post-images/7/new.png',
+        visibility_radius: 200,
+      }),
+    );
+
+    expect(imageStorage.deleteByPublicUrl).toHaveBeenCalledWith(
+      'https://images.example.com/post-images/7/old.png',
+      'post-images',
+    );
+  });
 });
