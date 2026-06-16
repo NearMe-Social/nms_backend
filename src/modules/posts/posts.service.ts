@@ -348,9 +348,14 @@ export class PostsService {
     postId: number,
     updatePostDto: UpdatePostDto,
     userId: number,
+    image?: Express.Multer.File,
   ): Promise<Post> {
     const post = await this.findOne(postId);
     this.assertOwner(post, userId);
+    const previousImageUrl = post.image_url;
+    const uploadedImage = image
+      ? await this.imageStorage.uploadPostImage(userId, image)
+      : null;
 
     if (updatePostDto.title !== undefined) {
       post.title = updatePostDto.title;
@@ -376,9 +381,36 @@ export class PostsService {
       post.expires_at = new Date(updatePostDto.expires_at);
     }
 
+    if (uploadedImage) {
+      post.image_url = uploadedImage.url;
+    }
+
     try {
-      return await this.postsRepository.save(post);
+      const savedPost = await this.postsRepository.save(post);
+
+      if (uploadedImage) {
+        try {
+          await this.imageStorage.deleteByPublicUrl(
+            previousImageUrl,
+            'post-images',
+          );
+        } catch {
+          // The post has the new image even if old storage cleanup is retried later.
+        }
+      }
+
+      return savedPost;
     } catch {
+      if (uploadedImage) {
+        try {
+          await this.imageStorage.deleteByPublicUrl(
+            uploadedImage.url,
+            'post-images',
+          );
+        } catch {
+          // Keep the update error if compensating cleanup also fails.
+        }
+      }
       throw new BadRequestException('Failed to update post');
     }
   }

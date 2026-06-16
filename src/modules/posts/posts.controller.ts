@@ -125,12 +125,35 @@ export class PostsController {
 
   @UseGuards(JwtAuthGuard)
   @Patch(':postId')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      limits: {
+        fileSize: 5 * 1024 * 1024,
+      },
+    }),
+  )
   update(
     @Param('postId', ParseIntPipe) postId: number,
     @Body() updatePostDto: UpdatePostDto,
     @Req() req: RequestWithUser,
+    @UploadedFile(
+      new ParseFilePipeBuilder()
+        .addMaxSizeValidator({ maxSize: 5 * 1024 * 1024 })
+        .addFileTypeValidator({
+          fileType: /image\/(jpeg|png|webp)/,
+        })
+        .build({
+          fileIsRequired: false,
+        }),
+    )
+    image?: Express.Multer.File,
   ): Promise<Post> {
-    return this.postsService.update(postId, updatePostDto, req.user.userId);
+    return this.postsService.update(
+      postId,
+      updatePostDto,
+      req.user.userId,
+      image,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
