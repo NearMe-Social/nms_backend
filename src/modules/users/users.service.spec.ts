@@ -216,11 +216,10 @@ describe('UsersService', () => {
         lat: 11.5564,
         lng: 104.9282,
         radius: 100,
-        nearbyRole: 'USER',
         locationFreshAfter: new Date('2026-05-06T10:00:00Z'),
       }),
     );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+    expect(queryBuilder.andWhere).not.toHaveBeenCalledWith(
       'nearby_user.role = :nearbyRole',
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
