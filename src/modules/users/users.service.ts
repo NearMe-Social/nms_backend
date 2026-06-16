@@ -260,7 +260,6 @@ export class UsersService {
       .addSelect('nearby_user.location_updated_at', 'location_updated_at')
       .addSelect(distanceSql, 'distance_m')
       .where('nearby_user.is_active = true')
-      .andWhere('nearby_user.role = :nearbyRole')
       .andWhere('nearby_user.current_latitude IS NOT NULL')
       .andWhere('nearby_user.current_longitude IS NOT NULL')
       .andWhere('nearby_user.location_updated_at >= :locationFreshAfter')
@@ -269,7 +268,6 @@ export class UsersService {
         lat: query.lat,
         lng: query.lng,
         radius,
-        nearbyRole: UserRole.USER,
         locationFreshAfter,
       })
       .orderBy('distance_m', 'ASC');
