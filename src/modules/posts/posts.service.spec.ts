@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Post } from './entities/post.entities';
+import { PostImage } from './entities/post-image.entity';
 import { PostsService } from './posts.service';
 import { R2ImageStorageService } from '../users/r2-image-storage.service';
 
@@ -11,6 +12,13 @@ describe('PostsService', () => {
     findOne: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
+    remove?: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
+  let postImagesRepository: {
+    create: jest.Mock;
+    save: jest.Mock;
+    delete: jest.Mock;
     createQueryBuilder: jest.Mock;
   };
   let imageStorage: {
@@ -36,6 +44,12 @@ describe('PostsService', () => {
     getMany: jest.Mock;
     getRawMany: jest.Mock;
   };
+  let imageQueryBuilder: {
+    leftJoinAndSelect: jest.Mock;
+    where: jest.Mock;
+    orderBy: jest.Mock;
+    getMany: jest.Mock;
+  };
 
   beforeEach(async () => {
     queryBuilder = {
@@ -57,6 +71,12 @@ describe('PostsService', () => {
       getMany: jest.fn(),
       getRawMany: jest.fn(),
     };
+    imageQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
     postsRepository = {
       find: jest.fn(),
       findOne: jest.fn(),
@@ -64,9 +84,15 @@ describe('PostsService', () => {
       save: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
     };
+    postImagesRepository = {
+      create: jest.fn((value: Partial<PostImage>) => value as PostImage),
+      save: jest.fn((value: PostImage[]) => Promise.resolve(value)),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      createQueryBuilder: jest.fn().mockReturnValue(imageQueryBuilder),
+    };
     imageStorage = {
       uploadPostImage: jest.fn(),
-      deleteByPublicUrl: jest.fn(),
+      deleteByPublicUrl: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -75,6 +101,10 @@ describe('PostsService', () => {
         {
           provide: getRepositoryToken(Post),
           useValue: postsRepository,
+        },
+        {
+          provide: getRepositoryToken(PostImage),
+          useValue: postImagesRepository,
         },
         {
           provide: R2ImageStorageService,
@@ -143,6 +173,7 @@ describe('PostsService', () => {
         },
         comments_count: 2,
         reactions_count: 3,
+        image_urls: [],
       },
     ]);
     expect(result[0]).not.toHaveProperty('latitude');
@@ -276,14 +307,21 @@ describe('PostsService', () => {
           expires_at: '2026-06-11T10:00:00.000Z',
         },
         7,
-        file,
+        [file],
       ),
     ).resolves.toEqual(
       expect.objectContaining({
         image_url: 'https://images.example.com/post-images/7/post.jpg',
+        image_urls: ['https://images.example.com/post-images/7/post.jpg'],
         user: { user_id: 7 },
       }),
     );
+    expect(postImagesRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        image_url: 'https://images.example.com/post-images/7/post.jpg',
+        display_order: 0,
+      }),
+    ]);
   });
 
   it('should replace a post image when the owner updates with a new image', async () => {
@@ -296,6 +334,7 @@ describe('PostsService', () => {
       title: 'Old title',
       content: 'Old content',
       image_url: 'https://images.example.com/post-images/7/old.png',
+      images: [],
       visibility_radius: 100,
       expires_at: new Date(Date.now() + 60_000),
       user: { user_id: 7 },
@@ -320,13 +359,14 @@ describe('PostsService', () => {
           expires_at: new Date(Date.now() + 120_000).toISOString(),
         },
         7,
-        file,
+        [file],
       ),
     ).resolves.toEqual(
       expect.objectContaining({
         title: 'New title',
         content: 'New content',
         image_url: 'https://images.example.com/post-images/7/new.png',
+        image_urls: ['https://images.example.com/post-images/7/new.png'],
         visibility_radius: 200,
       }),
     );
