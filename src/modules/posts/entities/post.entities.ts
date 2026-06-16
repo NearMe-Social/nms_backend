@@ -8,6 +8,7 @@ import {
   OneToMany,
   JoinColumn,
 } from 'typeorm';
+import { PostImage } from './post-image.entity';
 
 export enum PostStatus {
   ACTIVE = 'ACTIVE',
@@ -63,4 +64,7 @@ export class Post {
 
   @OneToMany('Reaction', 'post')
   reactions!: any[];
+
+  @OneToMany(() => PostImage, (image) => image.post)
+  images!: PostImage[];
 }
