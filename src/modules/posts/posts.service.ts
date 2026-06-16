@@ -133,16 +133,32 @@ export class PostsService {
   }
 
   async findMine(userId: number): Promise<PublicPost[]> {
-    const posts = await this.postsRepository
-      .createQueryBuilder('post')
-      .leftJoinAndSelect('post.user', 'user')
-      .leftJoinAndSelect('post.comments', 'comments')
-      .leftJoinAndSelect('post.reactions', 'reactions')
-      .leftJoinAndSelect('post.images', 'images')
-      .where('user.user_id = :userId', { userId })
-      .andWhere('post.status != :removed', { removed: PostStatus.REMOVED })
-      .orderBy('post.created_at', 'DESC')
-      .getMany();
+    let posts: Post[];
+
+    try {
+      posts = await this.postsRepository
+        .createQueryBuilder('post')
+        .leftJoinAndSelect('post.user', 'user')
+        .leftJoinAndSelect('post.comments', 'comments')
+        .leftJoinAndSelect('post.reactions', 'reactions')
+        .leftJoinAndSelect('post.images', 'images')
+        .where('user.user_id = :userId', { userId })
+        .andWhere('post.status != :removed', { removed: PostStatus.REMOVED })
+        .orderBy('post.created_at', 'DESC')
+        .getMany();
+    } catch (error) {
+      if (!this.isMissingPostImagesTableError(error)) throw error;
+
+      posts = await this.postsRepository
+        .createQueryBuilder('post')
+        .leftJoinAndSelect('post.user', 'user')
+        .leftJoinAndSelect('post.comments', 'comments')
+        .leftJoinAndSelect('post.reactions', 'reactions')
+        .where('user.user_id = :userId', { userId })
+        .andWhere('post.status != :removed', { removed: PostStatus.REMOVED })
+        .orderBy('post.created_at', 'DESC')
+        .getMany();
+    }
 
     return posts.map((post) => this.toPublicPost(post));
   }
@@ -522,6 +538,14 @@ export class PostsService {
       seen.add(url);
       return true;
     });
+  }
+
+  private isMissingPostImagesTableError(error: unknown): boolean {
+    const databaseError = error as { code?: string; message?: string };
+    return (
+      databaseError.code === '42P01' &&
+      Boolean(databaseError.message?.includes('post_images'))
+    );
   }
 
   private async loadImageUrlsForPostIds(
