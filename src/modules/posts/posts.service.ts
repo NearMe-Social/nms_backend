@@ -375,6 +375,15 @@ export class PostsService {
     this.assertOwner(post, userId);
     const previousImageUrls = this.extractImageUrls(post);
     const uploadedImages = await this.uploadPostImages(userId, images);
+    const shouldUpdateImages =
+      updatePostDto.keep_image_urls !== undefined || uploadedImages.length > 0;
+    const keptImageUrls = this.compactUrls(
+      updatePostDto.keep_image_urls ?? previousImageUrls,
+    );
+    const nextImageUrls = this.compactUrls([
+      ...keptImageUrls,
+      ...uploadedImages.map((image) => image.url),
+    ]);
 
     if (updatePostDto.title !== undefined) {
       post.title = updatePostDto.title;
@@ -400,17 +409,22 @@ export class PostsService {
       post.expires_at = new Date(updatePostDto.expires_at);
     }
 
-    if (uploadedImages.length > 0) {
-      post.image_url = uploadedImages[0].url;
+    if (shouldUpdateImages) {
+      post.image_url = nextImageUrls[0] ?? null;
     }
 
     try {
       const savedPost = await this.postsRepository.save(post);
 
-      if (uploadedImages.length > 0) {
+      if (shouldUpdateImages) {
         await this.postImagesRepository.delete({ post_id: postId });
-        savedPost.images = await this.savePostImages(savedPost, uploadedImages);
-        await this.deleteImageUrls(previousImageUrls);
+        savedPost.images = await this.savePostImages(
+          savedPost,
+          nextImageUrls.map((url) => ({ url })),
+        );
+        await this.deleteImageUrls(
+          previousImageUrls.filter((url) => !nextImageUrls.includes(url)),
+        );
       }
 
       return this.toPublicPost(savedPost);
