@@ -16,6 +16,7 @@ describe('PostsService', () => {
     createQueryBuilder: jest.Mock;
     manager: {
       createQueryBuilder: jest.Mock;
+      query: jest.Mock;
     };
   };
   let postImagesRepository: {
@@ -102,6 +103,7 @@ describe('PostsService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
       manager: {
         createQueryBuilder: jest.fn().mockReturnValue(blockQueryBuilder),
+        query: jest.fn().mockResolvedValue([]),
       },
     };
     postImagesRepository = {
@@ -141,6 +143,9 @@ describe('PostsService', () => {
   });
 
   it('should return nearby posts with approximate distance and no exact coordinates', async () => {
+    postsRepository.manager.query
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ post_id: 1 }]);
     queryBuilder.getRawMany.mockResolvedValue([
       {
         post_id: 1,
@@ -157,7 +162,6 @@ describe('PostsService', () => {
         profile_image: null,
         comments_count: '2',
         reactions_count: '3',
-        user_reacted: true,
         distance_m: '123.4',
       },
     ]);
@@ -176,9 +180,9 @@ describe('PostsService', () => {
       lng: 104.9282,
       radius: 200,
     });
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      expect.stringContaining('user_blocks block'),
-      { viewerUserId: 7 },
+    expect(postsRepository.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM user_blocks'),
+      [7],
     );
     expect(result).toEqual([
       {
@@ -282,9 +286,9 @@ describe('PostsService', () => {
       lat: 11.5564,
       lng: 104.9282,
     });
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      expect.stringContaining('user_blocks block'),
-      { viewerUserId: 7 },
+    expect(postsRepository.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('FROM user_blocks'),
+      [7],
     );
   });
 
@@ -315,10 +319,6 @@ describe('PostsService', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('profile_post.visibility_radius'),
-    );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      expect.stringContaining('user_blocks block'),
-      { viewerUserId: 7 },
     );
     expect(queryBuilder.setParameters).toHaveBeenCalledWith({
       lat: 11.5564,
