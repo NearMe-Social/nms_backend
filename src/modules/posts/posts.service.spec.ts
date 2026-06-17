@@ -14,6 +14,9 @@ describe('PostsService', () => {
     save: jest.Mock;
     remove?: jest.Mock;
     createQueryBuilder: jest.Mock;
+    manager: {
+      createQueryBuilder: jest.Mock;
+    };
   };
   let postImagesRepository: {
     create: jest.Mock;
@@ -50,6 +53,13 @@ describe('PostsService', () => {
     orderBy: jest.Mock;
     getMany: jest.Mock;
   };
+  let blockQueryBuilder: {
+    select: jest.Mock;
+    from: jest.Mock;
+    where: jest.Mock;
+    limit: jest.Mock;
+    getRawOne: jest.Mock;
+  };
 
   beforeEach(async () => {
     queryBuilder = {
@@ -77,12 +87,22 @@ describe('PostsService', () => {
       orderBy: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([]),
     };
+    blockQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      getRawOne: jest.fn().mockResolvedValue(null),
+    };
     postsRepository = {
       find: jest.fn(),
       findOne: jest.fn(),
       create: jest.fn((value: Partial<Post>) => value as Post),
       save: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+      manager: {
+        createQueryBuilder: jest.fn().mockReturnValue(blockQueryBuilder),
+      },
     };
     postImagesRepository = {
       create: jest.fn((value: Partial<PostImage>) => value as PostImage),
@@ -141,17 +161,24 @@ describe('PostsService', () => {
       },
     ]);
 
-    const result = await service.findNearby({
-      lat: 11.5564,
-      lng: 104.9282,
-      radius: 200,
-    });
+    const result = await service.findNearby(
+      {
+        lat: 11.5564,
+        lng: 104.9282,
+        radius: 200,
+      },
+      7,
+    );
 
     expect(queryBuilder.setParameters).toHaveBeenCalledWith({
       lat: 11.5564,
       lng: 104.9282,
       radius: 200,
     });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('user_blocks block'),
+      { viewerUserId: 7 },
+    );
     expect(result).toEqual([
       {
         post_id: 1,
@@ -239,7 +266,7 @@ describe('PostsService', () => {
   it('should search only active unexpired posts and limit results', async () => {
     queryBuilder.getMany.mockResolvedValue([]);
 
-    await service.search('road', 11.5564, 104.9282);
+    await service.search('road', 11.5564, 104.9282, 7);
 
     expect(queryBuilder.where).toHaveBeenCalledWith(
       'search_post.status = :status',
@@ -253,6 +280,10 @@ describe('PostsService', () => {
       lat: 11.5564,
       lng: 104.9282,
     });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('user_blocks block'),
+      { viewerUserId: 7 },
+    );
   });
 
   it('should return the owner profile posts without requiring location', async () => {
@@ -283,10 +314,31 @@ describe('PostsService', () => {
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       expect.stringContaining('profile_post.visibility_radius'),
     );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('user_blocks block'),
+      { viewerUserId: 7 },
+    );
     expect(queryBuilder.setParameters).toHaveBeenCalledWith({
       lat: 11.5564,
       lng: 104.9282,
     });
+  });
+
+  it('should hide a direct post when either user blocked the other', async () => {
+    postsRepository.findOne.mockResolvedValue({
+      post_id: 4,
+      latitude: 11.5564,
+      longitude: 104.9282,
+      visibility_radius: 200,
+      status: 'ACTIVE',
+      expires_at: new Date(Date.now() + 60_000),
+      user: { user_id: 8 },
+    });
+    blockQueryBuilder.getRawOne.mockResolvedValue({ exists: 1 });
+
+    await expect(service.findVisibleOne(4, 7, 11.5564, 104.9282)).rejects.toThrow(
+      'Post is not available',
+    );
   });
 
   it('should hide a post from a non-owner outside its visibility radius', async () => {

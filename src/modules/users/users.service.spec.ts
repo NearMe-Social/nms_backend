@@ -205,11 +205,14 @@ describe('UsersService', () => {
       },
     ]);
 
-    const result = await service.findNearby({
-      lat: 11.5564,
-      lng: 104.9282,
-      radius: 100,
-    });
+    const result = await service.findNearby(
+      {
+        lat: 11.5564,
+        lng: 104.9282,
+        radius: 100,
+      },
+      1,
+    );
 
     expect(queryBuilder.setParameters).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -224,6 +227,10 @@ describe('UsersService', () => {
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'nearby_user.location_updated_at >= :locationFreshAfter',
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('user_blocks block'),
+      { currentUserId: 1 },
     );
     expect(result).toEqual([
       {
@@ -258,6 +265,10 @@ describe('UsersService', () => {
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'search_user.user_id != :currentUserId',
+      { currentUserId: 1 },
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('user_blocks block'),
       { currentUserId: 1 },
     );
     expect(queryBuilder.limit).toHaveBeenCalledWith(5);

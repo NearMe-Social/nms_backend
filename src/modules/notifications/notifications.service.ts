@@ -120,6 +120,15 @@ export class NotificationsService {
 
     return this.notificationRepo.save(notification);
   }
+
+  async markAllAsRead(userId: number): Promise<{ updated: number }> {
+    const result = await this.notificationRepo.update(
+      { user: { user_id: userId }, is_read: false },
+      { is_read: true },
+    );
+
+    return { updated: result.affected ?? 0 };
+  }
 }
 
 export interface NotificationListItem {
