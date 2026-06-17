@@ -195,6 +195,7 @@ export class PostsService {
         .andWhere('profile_post.latitude IS NOT NULL')
         .andWhere('profile_post.longitude IS NOT NULL')
         .andWhere(`${distanceSql} <= profile_post.visibility_radius`)
+        .andWhere(this.notBlockedByViewerSql('user'), { viewerUserId })
         .setParameters({ lat, lng });
     }
 
@@ -202,11 +203,16 @@ export class PostsService {
     return posts.map((post) => this.toPublicPost(post));
   }
 
-  async search(query: string, lat: number, lng: number): Promise<PublicPost[]> {
+  async search(
+    query: string,
+    lat: number,
+    lng: number,
+    viewerUserId?: number,
+  ): Promise<PublicPost[]> {
     const search = `%${this.escapeLikePattern(query)}%`;
     const distanceSql = this.distanceSql('search_post');
 
-    const posts = await this.postsRepository
+    const queryBuilder = this.postsRepository
       .createQueryBuilder('search_post')
       .leftJoinAndSelect('search_post.user', 'user')
       .leftJoinAndSelect('search_post.comments', 'comments')
@@ -227,13 +233,23 @@ export class PostsService {
       )
       .setParameters({ lat, lng })
       .orderBy('search_post.created_at', 'DESC')
-      .limit(5)
-      .getMany();
+      .limit(5);
+
+    if (viewerUserId) {
+      queryBuilder.andWhere(this.notBlockedByViewerSql('user'), {
+        viewerUserId,
+      });
+    }
+
+    const posts = await queryBuilder.getMany();
 
     return posts.map((post) => this.toPublicPost(post));
   }
 
-  async findNearby(query: NearbyPostsQueryDto): Promise<NearbyPostResponse[]> {
+  async findNearby(
+    query: NearbyPostsQueryDto,
+    viewerUserId?: number,
+  ): Promise<NearbyPostResponse[]> {
     const radius = query.radius ?? 200;
 
     const distanceSql = this.distanceSql('post');
@@ -267,6 +283,12 @@ export class PostsService {
       .having(`${distanceSql} <= :radius`)
       .andHaving(`${distanceSql} <= post.visibility_radius`)
       .setParameters({ lat: query.lat, lng: query.lng, radius });
+
+    if (viewerUserId) {
+      queryBuilder.andWhere(this.notBlockedByViewerSql('user'), {
+        viewerUserId,
+      });
+    }
 
     if (query.sort === 'active') {
       queryBuilder
@@ -342,6 +364,10 @@ export class PostsService {
     const ownerId = Number(owner?.user_id);
 
     if (ownerId !== userId) {
+      if (await this.isEitherBlocked(userId, ownerId)) {
+        throw new NotFoundException('Post is not available');
+      }
+
       if (lat === undefined || lng === undefined) {
         throw new NotFoundException('Post is not available at your location');
       }
@@ -606,6 +632,47 @@ export class PostsService {
 
   private distanceLabel(distance: number): string {
     return `within ${distance}m`;
+  }
+
+  private notBlockedByViewerSql(userAlias: string): string {
+    return `
+      NOT EXISTS (
+        SELECT 1
+        FROM user_blocks block
+        WHERE (
+          block.blocker_id = :viewerUserId
+          AND block.blocked_user_id = ${userAlias}.user_id
+        )
+        OR (
+          block.blocker_id = ${userAlias}.user_id
+          AND block.blocked_user_id = :viewerUserId
+        )
+      )
+    `;
+  }
+
+  private async isEitherBlocked(userA: number, userB: number): Promise<boolean> {
+    if (!Number.isInteger(userA) || !Number.isInteger(userB)) return false;
+
+    const block = await this.postsRepository.manager
+      .createQueryBuilder()
+      .select('1', 'exists')
+      .from('user_blocks', 'block')
+      .where(
+        `(
+          block.blocker_id = :userA
+          AND block.blocked_user_id = :userB
+        )
+        OR (
+          block.blocker_id = :userB
+          AND block.blocked_user_id = :userA
+        )`,
+        { userA, userB },
+      )
+      .limit(1)
+      .getRawOne();
+
+    return Boolean(block);
   }
 
   private escapeLikePattern(value: string): string {

@@ -197,6 +197,7 @@ export class UsersService {
       .where('search_user.is_active = true')
       .andWhere('search_user.role = :role', { role: UserRole.USER })
       .andWhere('search_user.user_id != :currentUserId', { currentUserId })
+      .andWhere(this.notBlockedByViewerSql('search_user'), { currentUserId })
       .andWhere(
         `(
           search_user.username ILIKE :search ESCAPE '\\' OR
@@ -273,9 +274,13 @@ export class UsersService {
       .orderBy('distance_m', 'ASC');
 
     if (currentUserId) {
-      queryBuilder.andWhere('nearby_user.user_id != :currentUserId', {
-        currentUserId,
-      });
+      queryBuilder
+        .andWhere('nearby_user.user_id != :currentUserId', {
+          currentUserId,
+        })
+        .andWhere(this.notBlockedByViewerSql('nearby_user'), {
+          currentUserId,
+        });
     }
 
     const rows = await queryBuilder.getRawMany<NearbyUserRaw>();
@@ -304,6 +309,23 @@ export class UsersService {
 
   private distanceLabel(distance: number): string {
     return `within ${distance}m`;
+  }
+
+  private notBlockedByViewerSql(userAlias: string): string {
+    return `
+      NOT EXISTS (
+        SELECT 1
+        FROM user_blocks block
+        WHERE (
+          block.blocker_id = :currentUserId
+          AND block.blocked_user_id = ${userAlias}.user_id
+        )
+        OR (
+          block.blocker_id = ${userAlias}.user_id
+          AND block.blocked_user_id = :currentUserId
+        )
+      )
+    `;
   }
 
   private escapeLikePattern(value: string): string {
