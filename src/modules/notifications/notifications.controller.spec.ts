@@ -7,12 +7,14 @@ describe('NotificationsController', () => {
   let service: {
     getNotificationsByUser: jest.Mock;
     markAsRead: jest.Mock;
+    markAllAsRead: jest.Mock;
   };
 
   beforeEach(async () => {
     service = {
       getNotificationsByUser: jest.fn(),
       markAsRead: jest.fn(),
+      markAllAsRead: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -62,5 +64,15 @@ describe('NotificationsController', () => {
     ).resolves.toEqual({ notification_id: 9, is_read: true });
 
     expect(service.markAsRead).toHaveBeenCalledWith(5, 9);
+  });
+
+  it('marks all notifications as read', async () => {
+    service.markAllAsRead.mockResolvedValue({ updated: 3 });
+
+    await expect(
+      controller.markAllRead({ user: { userId: 5 } } as any),
+    ).resolves.toEqual({ updated: 3 });
+
+    expect(service.markAllAsRead).toHaveBeenCalledWith(5);
   });
 });

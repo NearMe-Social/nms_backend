@@ -38,9 +38,12 @@ describe('PostsController', () => {
       sort: 'latest' as const,
     };
     postsService.findNearby.mockResolvedValue([]);
+    const request = {
+      user: { userId: 7 },
+    } as Parameters<PostsController['findNearby']>[1];
 
-    await expect(controller.findNearby(query)).resolves.toEqual([]);
-    expect(postsService.findNearby).toHaveBeenCalledWith(query);
+    await expect(controller.findNearby(query, request)).resolves.toEqual([]);
+    expect(postsService.findNearby).toHaveBeenCalledWith(query, 7);
   });
 
   it('should create a post for the authenticated user', async () => {
@@ -60,7 +63,7 @@ describe('PostsController', () => {
     await expect(controller.create(dto, request)).resolves.toEqual({
       post_id: 1,
     });
-    expect(postsService.create).toHaveBeenCalledWith(dto, 7, undefined);
+    expect(postsService.create).toHaveBeenCalledWith(dto, 7, []);
   });
 
   it('should delegate privacy-aware user post queries', async () => {

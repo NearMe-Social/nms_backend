@@ -15,6 +15,7 @@ describe('NotificationsService', () => {
     save: jest.Mock;
     findAndCount: jest.Mock;
     findOne: jest.Mock;
+    update: jest.Mock;
   };
   let commentRepo: { find: jest.Mock };
   let messageRepo: { find: jest.Mock };
@@ -25,6 +26,7 @@ describe('NotificationsService', () => {
       save: jest.fn(),
       findAndCount: jest.fn(),
       findOne: jest.fn(),
+      update: jest.fn(),
     };
     commentRepo = { find: jest.fn().mockResolvedValue([]) };
     messageRepo = { find: jest.fn().mockResolvedValue([]) };
@@ -172,5 +174,15 @@ describe('NotificationsService', () => {
       notification_id: 1,
       is_read: true,
     });
+  });
+
+  it('marks all unread notifications as read', async () => {
+    repo.update.mockResolvedValue({ affected: 2 });
+
+    await expect(service.markAllAsRead(1)).resolves.toEqual({ updated: 2 });
+    expect(repo.update).toHaveBeenCalledWith(
+      { user: { user_id: 1 }, is_read: false },
+      { is_read: true },
+    );
   });
 });

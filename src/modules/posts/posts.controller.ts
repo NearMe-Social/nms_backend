@@ -84,16 +84,22 @@ export class PostsController {
 
   @UseGuards(JwtAuthGuard)
   @Get('search')
-  search(@Query() query: SearchPostsQueryDto) {
-    return this.postsService.search(query.q, query.lat, query.lng);
+  search(@Query() query: SearchPostsQueryDto, @Req() req: RequestWithUser) {
+    return this.postsService.search(
+      query.q,
+      query.lat,
+      query.lng,
+      req.user.userId,
+    );
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('nearby')
   findNearby(
     @Query() query: NearbyPostsQueryDto,
+    @Req() req: RequestWithUser,
   ): Promise<NearbyPostResponse[]> {
-    return this.postsService.findNearby(query);
+    return this.postsService.findNearby(query, req.user.userId);
   }
 
   @UseGuards(JwtAuthGuard)
