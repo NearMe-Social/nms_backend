@@ -14,6 +14,7 @@ import { MessagesModule } from './modules/messages/messages.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { ReactionsModule } from './modules/reactions/reactions.module';
 
 
 @Module({
@@ -53,7 +54,8 @@ import { AdminModule } from './modules/admin/admin.module';
     MessagesModule,
     ConversationsModule,
     NotificationsModule,
-    AdminModule
+    AdminModule,
+    ReactionsModule
   ],
 
   controllers: [AppController],

@@ -157,6 +157,7 @@ describe('PostsService', () => {
         profile_image: null,
         comments_count: '2',
         reactions_count: '3',
+        user_reacted: true,
         distance_m: '123.4',
       },
     ]);
@@ -200,6 +201,7 @@ describe('PostsService', () => {
         },
         comments_count: 2,
         reactions_count: 3,
+        user_reacted: true,
         image_urls: [],
       },
     ]);
