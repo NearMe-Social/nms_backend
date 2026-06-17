@@ -363,7 +363,7 @@ describe('PostsService', () => {
     ]);
   });
 
-  it('should replace a post image when the owner updates with a new image', async () => {
+  it('should keep existing images when the owner appends a new image', async () => {
     const file = {
       mimetype: 'image/png',
       buffer: Buffer.from('image'),
@@ -373,7 +373,12 @@ describe('PostsService', () => {
       title: 'Old title',
       content: 'Old content',
       image_url: 'https://images.example.com/post-images/7/old.png',
-      images: [],
+      images: [
+        {
+          image_url: 'https://images.example.com/post-images/7/old.png',
+          display_order: 0,
+        },
+      ],
       visibility_radius: 100,
       expires_at: new Date(Date.now() + 60_000),
       user: { user_id: 7 },
@@ -404,9 +409,56 @@ describe('PostsService', () => {
       expect.objectContaining({
         title: 'New title',
         content: 'New content',
-        image_url: 'https://images.example.com/post-images/7/new.png',
-        image_urls: ['https://images.example.com/post-images/7/new.png'],
+        image_url: 'https://images.example.com/post-images/7/old.png',
+        image_urls: [
+          'https://images.example.com/post-images/7/old.png',
+          'https://images.example.com/post-images/7/new.png',
+        ],
         visibility_radius: 200,
+      }),
+    );
+
+    expect(imageStorage.deleteByPublicUrl).not.toHaveBeenCalled();
+  });
+
+  it('should remove old images that are not kept during edit', async () => {
+    const existingPost = {
+      post_id: 9,
+      title: 'Old title',
+      content: 'Old content',
+      image_url: 'https://images.example.com/post-images/7/old.png',
+      images: [
+        {
+          image_url: 'https://images.example.com/post-images/7/old.png',
+          display_order: 0,
+        },
+        {
+          image_url: 'https://images.example.com/post-images/7/keep.png',
+          display_order: 1,
+        },
+      ],
+      visibility_radius: 100,
+      expires_at: new Date(Date.now() + 60_000),
+      user: { user_id: 7 },
+    } as Post;
+
+    postsRepository.findOne.mockResolvedValue(existingPost);
+    postsRepository.save.mockImplementation((value: Post) =>
+      Promise.resolve(value),
+    );
+
+    await expect(
+      service.update(
+        9,
+        {
+          keep_image_urls: ['https://images.example.com/post-images/7/keep.png'],
+        },
+        7,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        image_url: 'https://images.example.com/post-images/7/keep.png',
+        image_urls: ['https://images.example.com/post-images/7/keep.png'],
       }),
     );
 

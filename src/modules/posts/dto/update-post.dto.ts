@@ -1,5 +1,6 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
   IsDateString,
   IsInt,
   IsLatitude,
@@ -42,4 +43,20 @@ export class UpdatePostDto {
   @IsOptional()
   @IsDateString()
   expires_at?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value !== 'string') return value;
+
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      return Array.isArray(parsed) ? parsed : [value];
+    } catch {
+      return value ? [value] : [];
+    }
+  })
+  @IsArray()
+  @IsString({ each: true })
+  keep_image_urls?: string[];
 }
