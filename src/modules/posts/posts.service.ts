@@ -35,10 +35,12 @@ export interface NearbyPostResponse {
   } | null;
   comments_count: number;
   reactions_count: number;
+  user_reacted: boolean;
 }
 
 export type PublicPost = Omit<Post, 'latitude' | 'longitude'> & {
   image_urls: string[];
+  user_reacted?: boolean;
 };
 
 interface NearbyPostRaw {
@@ -56,6 +58,7 @@ interface NearbyPostRaw {
   profile_image: string | null;
   comments_count: number | string;
   reactions_count: number | string;
+  user_reacted: boolean | string | number;
   distance_m: number | string;
 }
 
@@ -285,9 +288,13 @@ export class PostsService {
       .setParameters({ lat: query.lat, lng: query.lng, radius });
 
     if (viewerUserId) {
-      queryBuilder.andWhere(this.notBlockedByViewerSql('user'), {
-        viewerUserId,
-      });
+      queryBuilder
+        .addSelect(this.viewerReactionSql('user'), 'user_reacted')
+        .andWhere(this.notBlockedByViewerSql('user'), {
+          viewerUserId,
+        });
+    } else {
+      queryBuilder.addSelect('false', 'user_reacted');
     }
 
     if (query.sort === 'active') {
@@ -336,6 +343,7 @@ export class PostsService {
           : null,
         comments_count: commentsCount,
         reactions_count: reactionsCount,
+        user_reacted: this.toBoolean(row.user_reacted),
       };
     });
   }
@@ -649,6 +657,22 @@ export class PostsService {
         )
       )
     `;
+  }
+
+  private viewerReactionSql(userAlias: string): string {
+    return `
+      EXISTS (
+        SELECT 1
+        FROM reactions viewer_reaction
+        WHERE viewer_reaction.post_id = post.post_id
+        AND viewer_reaction.user_id = :viewerUserId
+        AND ${userAlias}.user_id IS NOT NULL
+      )
+    `;
+  }
+
+  private toBoolean(value: boolean | string | number | null | undefined): boolean {
+    return value === true || value === 'true' || value === '1' || value === 1;
   }
 
   private async isEitherBlocked(userA: number, userB: number): Promise<boolean> {
