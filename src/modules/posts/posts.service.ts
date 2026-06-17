@@ -58,7 +58,6 @@ interface NearbyPostRaw {
   profile_image: string | null;
   comments_count: number | string;
   reactions_count: number | string;
-  user_reacted: boolean | string | number;
   distance_m: number | string;
 }
 
@@ -173,6 +172,13 @@ export class PostsService {
     lng?: number,
     limit = 3,
   ): Promise<PublicPost[]> {
+    if (
+      targetUserId !== viewerUserId &&
+      (await this.isEitherBlocked(viewerUserId, targetUserId))
+    ) {
+      return [];
+    }
+
     const queryBuilder = this.postsRepository
       .createQueryBuilder('profile_post')
       .leftJoinAndSelect('profile_post.user', 'user')
@@ -198,7 +204,6 @@ export class PostsService {
         .andWhere('profile_post.latitude IS NOT NULL')
         .andWhere('profile_post.longitude IS NOT NULL')
         .andWhere(`${distanceSql} <= profile_post.visibility_radius`)
-        .andWhere(this.notBlockedByViewerSql('user'), { viewerUserId })
         .setParameters({ lat, lng });
     }
 
@@ -214,6 +219,7 @@ export class PostsService {
   ): Promise<PublicPost[]> {
     const search = `%${this.escapeLikePattern(query)}%`;
     const distanceSql = this.distanceSql('search_post');
+    const excludedUserIds = await this.loadExcludedUserIds(viewerUserId);
 
     const queryBuilder = this.postsRepository
       .createQueryBuilder('search_post')
@@ -239,9 +245,11 @@ export class PostsService {
       .limit(5);
 
     if (viewerUserId) {
-      queryBuilder.andWhere(this.notBlockedByViewerSql('user'), {
-        viewerUserId,
-      });
+      if (excludedUserIds.length > 0) {
+        queryBuilder.andWhere('user.user_id NOT IN (:...excludedUserIds)', {
+          excludedUserIds,
+        });
+      }
     }
 
     const posts = await queryBuilder.getMany();
@@ -254,6 +262,7 @@ export class PostsService {
     viewerUserId?: number,
   ): Promise<NearbyPostResponse[]> {
     const radius = query.radius ?? 200;
+    const excludedUserIds = await this.loadExcludedUserIds(viewerUserId);
 
     const distanceSql = this.distanceSql('post');
 
@@ -287,14 +296,10 @@ export class PostsService {
       .andHaving(`${distanceSql} <= post.visibility_radius`)
       .setParameters({ lat: query.lat, lng: query.lng, radius });
 
-    if (viewerUserId) {
-      queryBuilder
-        .addSelect(this.viewerReactionSql('user'), 'user_reacted')
-        .andWhere(this.notBlockedByViewerSql('user'), {
-          viewerUserId,
-        });
-    } else {
-      queryBuilder.addSelect('false', 'user_reacted');
+    if (viewerUserId && excludedUserIds.length > 0) {
+      queryBuilder.andWhere('user.user_id NOT IN (:...excludedUserIds)', {
+        excludedUserIds,
+      });
     }
 
     if (query.sort === 'active') {
@@ -309,8 +314,13 @@ export class PostsService {
     }
 
     const rows = await queryBuilder.getRawMany<NearbyPostRaw>();
+    const postIds = rows.map((row) => Number(row.post_id));
+    const viewerReactionPostIds = await this.loadViewerReactionPostIds(
+      viewerUserId,
+      postIds,
+    );
     const imageUrlMap = await this.loadImageUrlsForPostIds(
-      rows.map((row) => Number(row.post_id)),
+      postIds,
     );
 
     return rows.map((row) => {
@@ -343,7 +353,7 @@ export class PostsService {
           : null,
         comments_count: commentsCount,
         reactions_count: reactionsCount,
-        user_reacted: this.toBoolean(row.user_reacted),
+        user_reacted: viewerReactionPostIds.has(Number(row.post_id)),
       };
     });
   }
@@ -642,39 +652,6 @@ export class PostsService {
     return `within ${distance}m`;
   }
 
-  private notBlockedByViewerSql(userAlias: string): string {
-    return `
-      NOT EXISTS (
-        SELECT 1
-        FROM user_blocks block
-        WHERE (
-          block.blocker_id = :viewerUserId
-          AND block.blocked_user_id = ${userAlias}.user_id
-        )
-        OR (
-          block.blocker_id = ${userAlias}.user_id
-          AND block.blocked_user_id = :viewerUserId
-        )
-      )
-    `;
-  }
-
-  private viewerReactionSql(userAlias: string): string {
-    return `
-      EXISTS (
-        SELECT 1
-        FROM reactions viewer_reaction
-        WHERE viewer_reaction.post_id = post.post_id
-        AND viewer_reaction.user_id = :viewerUserId
-        AND ${userAlias}.user_id IS NOT NULL
-      )
-    `;
-  }
-
-  private toBoolean(value: boolean | string | number | null | undefined): boolean {
-    return value === true || value === 'true' || value === '1' || value === 1;
-  }
-
   private async isEitherBlocked(userA: number, userB: number): Promise<boolean> {
     if (!Number.isInteger(userA) || !Number.isInteger(userB)) return false;
 
@@ -697,6 +674,52 @@ export class PostsService {
       .getRawOne();
 
     return Boolean(block);
+  }
+
+  private async loadExcludedUserIds(viewerUserId?: number): Promise<number[]> {
+    if (!Number.isInteger(viewerUserId)) return [];
+
+    const rows = await this.postsRepository.manager.query(
+      `
+        SELECT blocked_user_id AS user_id
+        FROM user_blocks
+        WHERE blocker_id = $1
+        UNION
+        SELECT blocker_id AS user_id
+        FROM user_blocks
+        WHERE blocked_user_id = $1
+      `,
+      [viewerUserId],
+    );
+
+    return rows
+      .map((row: { user_id: number | string }) => Number(row.user_id))
+      .filter((userId: number) => Number.isInteger(userId));
+  }
+
+  private async loadViewerReactionPostIds(
+    viewerUserId: number | undefined,
+    postIds: number[],
+  ): Promise<Set<number>> {
+    if (!Number.isInteger(viewerUserId) || postIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await this.postsRepository.manager.query(
+      `
+        SELECT post_id
+        FROM reactions
+        WHERE user_id = $1
+        AND post_id = ANY($2::int[])
+      `,
+      [viewerUserId, postIds],
+    );
+
+    return new Set(
+      rows
+        .map((row: { post_id: number | string }) => Number(row.post_id))
+        .filter((postId: number) => Number.isInteger(postId)),
+    );
   }
 
   private escapeLikePattern(value: string): string {
